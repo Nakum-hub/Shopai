@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("active") // active, paused, completed, failed
+  framework   String   @default("nextjs")
+  stack       String   @default("typescript")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks       Task[]
+  executions  Execution[]
+  memories    Memory[]
+}
+
+model Agent {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // planner, frontend, backend, database, devops, security, testing, refactor, documentation
+  status      String   @default("idle") // idle, working, error, completed
+  model       String   @default("claude-4-opus")
+  description String?
+  capabilities String   // JSON array of capabilities
+  config      String?  // JSON config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks       Task[]      @relation("AgentTasks")
+  executions  Execution[] @relation("AgentExecutions")
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  status      String   @default("pending") // pending, running, completed, failed, retrying
+  priority    String   @default("medium") // low, medium, high, critical
+  type        String   @default("feature") // feature, bugfix, refactor, test, deploy, documentation
+  agentId     String?
+  projectId   String
+  parentId    String?
+  order       Int      @default(0)
+  metadata    String?  // JSON metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agent       Agent?   @relation("AgentTasks", fields: [agentId], references: [id], onDelete: SetNull)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent      Task?    @relation("TaskTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Task[]   @relation("TaskTree")
+  executions  Execution[]
+}
+
+model Execution {
+  id          String   @id @default(cuid())
+  status      String   @default("pending") // pending, running, success, failed, timeout
+  type        String   @default("build") // build, test, deploy, lint, custom
+  command     String?
+  output      String?  // stdout
+  error       String?  // stderr
+  duration    Int?     // ms
+  sandbox     String?  // sandbox ID
+  metadata    String?  // JSON metadata (screenshots, logs, etc.)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  agentId     String?
+  projectId   String
+  taskId      String?
+
+  agent       Agent?   @relation("AgentExecutions", fields: [agentId], references: [id], onDelete: SetNull)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+model Memory {
+  id          String   @id @default(cuid())
+  type        String   @default("file") // file, vector, graph, session
+  key         String
+  value       String   // can be text, JSON, embeddings reference
+  projectId   String
+  tags        String?  // comma-separated tags
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  type        String   // agent_start, agent_complete, task_created, execution_start, execution_complete, error, info
+  title       String
+  description String?
+  metadata    String?  // JSON metadata
+  createdAt   DateTime @default(now())
+}
