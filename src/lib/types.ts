@@ -3,7 +3,7 @@
 // =============================================================================
 
 // Navigation
-export type ViewType = 'builder' | 'preview' | 'projects' | 'templates' | 'analytics' | 'settings';
+export type ViewType = 'builder' | 'preview' | 'projects' | 'templates' | 'agents' | 'analytics' | 'settings';
 
 // Storefront
 export type StorefrontStatus = 'draft' | 'generating' | 'ready' | 'published' | 'error';

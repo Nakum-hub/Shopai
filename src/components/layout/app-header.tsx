@@ -20,6 +20,7 @@ const viewTitles: Record<string, string> = {
   preview: 'Storefront Preview',
   projects: 'My Storefronts',
   templates: 'Templates',
+  agents: 'AI Agents',
   analytics: 'Analytics',
   settings: 'Settings',
 };
@@ -29,6 +30,7 @@ const viewDescriptions: Record<string, string> = {
   preview: 'Preview and customize your generated storefront',
   projects: 'Manage all your generated storefronts',
   templates: 'Browse business-specific templates',
+  agents: 'Monitor and manage your AI agent fleet',
   analytics: 'Track storefront performance and insights',
   settings: 'Configure your platform preferences',
 };

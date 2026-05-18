@@ -31,15 +31,17 @@ import {
 } from '@/components/ui/select';
 import {
   Bot,
-  Zap,
-  Code,
-  Cpu,
-  Database,
-  Container,
-  Shield,
+  Palette,
+  Monitor,
+  PenTool,
+  Package,
   Search,
+  Rocket,
+  Bug,
   Wrench,
-  FileText,
+  Mic,
+  Brain,
+  Globe,
   Play,
   CheckCircle,
   XCircle,
@@ -47,12 +49,9 @@ import {
   Activity,
   Settings,
   ChevronRight,
-  ArrowRight,
   BarChart3,
   Workflow,
   Layers,
-  Plus,
-  MoreVertical,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -71,15 +70,14 @@ import { cn } from '@/lib/utils';
 // ---------------------------------------------------------------------------
 
 type AgentType =
-  | 'planner'
-  | 'frontend'
-  | 'backend'
-  | 'database'
-  | 'devops'
-  | 'security'
-  | 'testing'
-  | 'refactor'
-  | 'documentation';
+  | 'branding'
+  | 'ui'
+  | 'content'
+  | 'product'
+  | 'seo'
+  | 'deployment'
+  | 'debug'
+  | 'repair';
 
 type AgentStatus = 'idle' | 'working' | 'error' | 'completed';
 
@@ -120,50 +118,45 @@ const AGENT_COLORS: Record<
   AgentType,
   { color: string; bg: string; border: string }
 > = {
-  planner: {
+  branding: {
     color: 'text-amber-500',
     bg: 'bg-amber-500/10',
     border: 'border-amber-500/20',
   },
-  frontend: {
+  ui: {
     color: 'text-sky-500',
     bg: 'bg-sky-500/10',
     border: 'border-sky-500/20',
   },
-  backend: {
+  content: {
     color: 'text-violet-500',
     bg: 'bg-violet-500/10',
     border: 'border-violet-500/20',
   },
-  database: {
+  product: {
     color: 'text-emerald-500',
     bg: 'bg-emerald-500/10',
     border: 'border-emerald-500/20',
   },
-  devops: {
-    color: 'text-orange-500',
-    bg: 'bg-orange-500/10',
-    border: 'border-orange-500/20',
-  },
-  security: {
-    color: 'text-red-500',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
-  },
-  testing: {
+  seo: {
     color: 'text-teal-500',
     bg: 'bg-teal-500/10',
     border: 'border-teal-500/20',
   },
-  refactor: {
+  deployment: {
+    color: 'text-orange-500',
+    bg: 'bg-orange-500/10',
+    border: 'border-orange-500/20',
+  },
+  debug: {
+    color: 'text-red-500',
+    bg: 'bg-red-500/10',
+    border: 'border-red-500/20',
+  },
+  repair: {
     color: 'text-pink-500',
     bg: 'bg-pink-500/10',
     border: 'border-pink-500/20',
-  },
-  documentation: {
-    color: 'text-cyan-500',
-    bg: 'bg-cyan-500/10',
-    border: 'border-cyan-500/20',
   },
 };
 
@@ -204,258 +197,229 @@ const STATUS_CONFIG: Record<
 const AGENTS: AgentData[] = [
   {
     id: 'agent-1',
-    name: 'Planner',
-    type: 'planner',
+    name: 'Branding',
+    type: 'branding',
     status: 'working',
-    model: 'claude-4-opus',
-    icon: <Zap className="h-4 w-4" />,
-    color: AGENT_COLORS.planner.color,
-    bgColor: AGENT_COLORS.planner.bg,
-    borderColor: AGENT_COLORS.planner.border,
-    capabilities: ['Task Decomposition', 'Dependency Analysis', 'Agent Routing', 'Priority Assignment'],
+    model: 'claude-4-sonnet',
+    icon: <Palette className="h-4 w-4" />,
+    color: AGENT_COLORS.branding.color,
+    bgColor: AGENT_COLORS.branding.bg,
+    borderColor: AGENT_COLORS.branding.border,
+    capabilities: ['Color Palettes', 'Typography Selection', 'Logo Concepts', 'Brand Guidelines'],
     description:
-      'Orchestrates task decomposition and intelligent agent delegation. Analyzes user requirements, breaks them into actionable tasks, identifies dependencies, and routes work to the most suitable agents. Maintains a global view of project progress.',
-    tasksCompleted: 247,
-    tasksFailed: 12,
-    successRate: 95.3,
-    avgResponseTime: '1.2s',
-    temperature: 0.3,
+      'Creates distinctive brand identities from voice descriptions. Analyzes business tone, industry, and target audience to generate color palettes, typography pairings, logo concepts, and comprehensive brand guidelines that give each storefront a unique personality.',
+    tasksCompleted: 312,
+    tasksFailed: 8,
+    successRate: 97.5,
+    avgResponseTime: '2.4s',
+    temperature: 0.6,
     maxTokens: 8192,
     recentExecutions: [
-      { id: 'e1', status: 'success', command: 'decompose --story "Auth module redesign"', duration: '3.4s', timestamp: '2 min ago' },
-      { id: 'e2', status: 'success', command: 'route --task "API schema migration"', duration: '1.1s', timestamp: '15 min ago' },
-      { id: 'e3', status: 'failed', command: 'analyze --deps "Sprint 14"', duration: '8.2s', timestamp: '32 min ago' },
-      { id: 'e4', status: 'success', command: 'plan --feature "Dark mode support"', duration: '4.7s', timestamp: '1 hr ago' },
-      { id: 'e5', status: 'success', command: 'prioritize --backlog --weight', duration: '2.0s', timestamp: '2 hr ago' },
+      { id: 'e1', status: 'running', command: 'generate --brand-palette "artisan bakery"', duration: '4.8s', timestamp: 'Just now' },
+      { id: 'e2', status: 'success', command: 'select --typography "luxury jewelry store"', duration: '2.1s', timestamp: '12 min ago' },
+      { id: 'e3', status: 'success', command: 'concept --logo "Mountain Trail Outfitters"', duration: '6.3s', timestamp: '28 min ago' },
+      { id: 'e4', status: 'success', command: 'guide --brand "Sweet Dreams Bakery"', duration: '8.7s', timestamp: '1 hr ago' },
+      { id: 'e5', status: 'failed', command: 'generate --palette --mood "industrial plumbing"', duration: '3.2s', timestamp: '2 hr ago' },
     ],
   },
   {
     id: 'agent-2',
-    name: 'Frontend',
-    type: 'frontend',
+    name: 'UI',
+    type: 'ui',
     status: 'working',
-    model: 'claude-4-sonnet',
-    icon: <Code className="h-4 w-4" />,
-    color: AGENT_COLORS.frontend.color,
-    bgColor: AGENT_COLORS.frontend.bg,
-    borderColor: AGENT_COLORS.frontend.border,
-    capabilities: ['React/Next.js', 'Component Design', 'Tailwind CSS', 'Responsive Layout'],
+    model: 'gpt-4o',
+    icon: <Monitor className="h-4 w-4" />,
+    color: AGENT_COLORS.ui.color,
+    bgColor: AGENT_COLORS.ui.bg,
+    borderColor: AGENT_COLORS.ui.border,
+    capabilities: ['Responsive Layouts', 'Component Design', 'Page Architecture', 'Accessibility'],
     description:
-      'Specializes in building performant, accessible UI components and pages. Expert in React patterns, Tailwind CSS styling, responsive design, and component architecture. Follows shadcn/ui conventions and accessibility best practices.',
-    tasksCompleted: 389,
-    tasksFailed: 18,
-    successRate: 95.6,
-    avgResponseTime: '2.8s',
-    temperature: 0.2,
-    maxTokens: 4096,
-    recentExecutions: [
-      { id: 'e6', status: 'running', command: 'build --component DashboardLayout', duration: '12.3s', timestamp: 'Just now' },
-      { id: 'e7', status: 'success', command: 'style --refactor UserCard dark-mode', duration: '5.1s', timestamp: '8 min ago' },
-      { id: 'e8', status: 'success', command: 'create --page /settings/profile', duration: '18.4s', timestamp: '25 min ago' },
-      { id: 'e9', status: 'failed', command: 'fix --animation sidebar-transition', duration: '6.7s', timestamp: '1 hr ago' },
-      { id: 'e10', status: 'success', command: 'test --visual regression home', duration: '22.0s', timestamp: '1.5 hr ago' },
-    ],
-  },
-  {
-    id: 'agent-3',
-    name: 'Backend',
-    type: 'backend',
-    status: 'idle',
-    model: 'gpt-5',
-    icon: <Cpu className="h-4 w-4" />,
-    color: AGENT_COLORS.backend.color,
-    bgColor: AGENT_COLORS.backend.bg,
-    borderColor: AGENT_COLORS.backend.border,
-    capabilities: ['API Routes', 'Business Logic', 'Authentication', 'Data Validation'],
-    description:
-      'Handles server-side development including API route implementation, middleware, authentication flows, and complex business logic. Optimizes for performance, type safety, and maintainability using modern TypeScript patterns.',
-    tasksCompleted: 312,
-    tasksFailed: 22,
-    successRate: 93.4,
+      'Designs responsive storefront layouts and component systems optimized for conversions. Creates page architectures with hero sections, product grids, navigation patterns, and mobile-first designs that adapt beautifully across all screen sizes while maintaining accessibility standards.',
+    tasksCompleted: 428,
+    tasksFailed: 15,
+    successRate: 96.6,
     avgResponseTime: '3.1s',
     temperature: 0.2,
     maxTokens: 6144,
     recentExecutions: [
-      { id: 'e11', status: 'success', command: 'create --route POST /api/projects', duration: '8.9s', timestamp: '20 min ago' },
-      { id: 'e12', status: 'success', command: 'implement --auth JWT-refresh-flow', duration: '14.2s', timestamp: '45 min ago' },
-      { id: 'e13', status: 'success', command: 'optimize --query agent-executions', duration: '6.3s', timestamp: '1.5 hr ago' },
-      { id: 'e14', status: 'failed', command: 'fix --race-condition /api/tasks', duration: '11.0s', timestamp: '2 hr ago' },
-      { id: 'e15', status: 'success', command: 'validate --schema user-input', duration: '3.4s', timestamp: '3 hr ago' },
+      { id: 'e6', status: 'running', command: 'layout --responsive "organic skincare homepage"', duration: '14.2s', timestamp: 'Just now' },
+      { id: 'e7', status: 'success', command: 'design --component "product-card grid"', duration: '5.6s', timestamp: '18 min ago' },
+      { id: 'e8', status: 'success', command: 'architect --page "checkout flow"', duration: '11.3s', timestamp: '35 min ago' },
+      { id: 'e9', status: 'success', command: 'audit --a11y "pet supplies mobile nav"', duration: '7.8s', timestamp: '1 hr ago' },
+      { id: 'e10', status: 'failed', command: 'layout --hero "auto parts landing"', duration: '9.1s', timestamp: '2 hr ago' },
+    ],
+  },
+  {
+    id: 'agent-3',
+    name: 'Content',
+    type: 'content',
+    status: 'working',
+    model: 'claude-4-sonnet',
+    icon: <PenTool className="h-4 w-4" />,
+    color: AGENT_COLORS.content.color,
+    bgColor: AGENT_COLORS.content.bg,
+    borderColor: AGENT_COLORS.content.border,
+    capabilities: ['Copywriting', 'Headlines', 'Product Descriptions', 'CTA Optimization'],
+    description:
+      'Writes compelling storefront copy that converts visitors into customers. Crafts attention-grabbing headlines, persuasive product descriptions, trust-building about pages, and optimized call-to-action buttons tailored to each business\'s unique voice and audience.',
+    tasksCompleted: 567,
+    tasksFailed: 11,
+    successRate: 98.1,
+    avgResponseTime: '1.8s',
+    temperature: 0.7,
+    maxTokens: 4096,
+    recentExecutions: [
+      { id: 'e11', status: 'success', command: 'write --hero-copy "Sweet Dreams Bakery"', duration: '3.2s', timestamp: '5 min ago' },
+      { id: 'e12', status: 'running', command: 'describe --product "hand-poured soy candles"', duration: '6.1s', timestamp: 'Just now' },
+      { id: 'e13', status: 'success', command: 'headline --optimize "fitness coaching signup"', duration: '2.4s', timestamp: '22 min ago' },
+      { id: 'e14', status: 'success', command: 'cta --buttons "subscription box checkout"', duration: '1.9s', timestamp: '45 min ago' },
+      { id: 'e15', status: 'success', command: 'copy --about-page "family-owned nursery"', duration: '8.5s', timestamp: '1.5 hr ago' },
     ],
   },
   {
     id: 'agent-4',
-    name: 'Database',
-    type: 'database',
+    name: 'Product',
+    type: 'product',
     status: 'completed',
-    model: 'claude-4-sonnet',
-    icon: <Database className="h-4 w-4" />,
-    color: AGENT_COLORS.database.color,
-    bgColor: AGENT_COLORS.database.bg,
-    borderColor: AGENT_COLORS.database.border,
-    capabilities: ['Schema Design', 'Migrations', 'Query Optimization', 'Seeding'],
+    model: 'gemini-2.5-flash',
+    icon: <Package className="h-4 w-4" />,
+    color: AGENT_COLORS.product.color,
+    bgColor: AGENT_COLORS.product.bg,
+    borderColor: AGENT_COLORS.product.border,
+    capabilities: ['Product Catalogs', 'Pricing Structure', 'Category Organization', 'Image Generation Prompts'],
     description:
-      'Expert in database schema design, migration management, and query performance optimization. Works with Prisma ORM and SQLite to ensure data integrity, proper indexing, and efficient queries across all data operations.',
-    tasksCompleted: 156,
-    tasksFailed: 5,
-    successRate: 96.9,
-    avgResponseTime: '2.1s',
-    temperature: 0.1,
+      'Structures product and service catalogs with intelligent categorization and pricing. Organizes inventory into logical hierarchies, generates product image prompts for AI-generated visuals, and creates clear pricing displays that help customers find and purchase with confidence.',
+    tasksCompleted: 389,
+    tasksFailed: 6,
+    successRate: 98.5,
+    avgResponseTime: '2.6s',
+    temperature: 0.3,
     maxTokens: 4096,
     recentExecutions: [
-      { id: 'e16', status: 'success', command: 'migrate --apply #47 user_preferences', duration: '4.2s', timestamp: '5 min ago' },
-      { id: 'e17', status: 'success', command: 'seed --fixtures development', duration: '7.8s', timestamp: '30 min ago' },
-      { id: 'e18', status: 'success', command: 'optimize --index executions-table', duration: '2.9s', timestamp: '1 hr ago' },
-      { id: 'e19', status: 'success', command: 'design --schema agent-config', duration: '5.5s', timestamp: '2 hr ago' },
-      { id: 'e20', status: 'failed', command: 'rollback --migration #46', duration: '1.1s', timestamp: '3 hr ago' },
+      { id: 'e16', status: 'success', command: 'catalog --structure "coffee roastery 12 SKUs"', duration: '5.4s', timestamp: '8 min ago' },
+      { id: 'e17', status: 'success', command: 'pricing --display "tiered subscription plans"', duration: '3.1s', timestamp: '25 min ago' },
+      { id: 'e18', status: 'success', command: 'category --organize "home decor 50+ items"', duration: '4.7s', timestamp: '50 min ago' },
+      { id: 'e19', status: 'success', command: 'prompt --image "artisan leather wallet hero"', duration: '2.8s', timestamp: '1 hr ago' },
+      { id: 'e20', status: 'failed', command: 'catalog --import "csv wholesale feed"', duration: '12.3s', timestamp: '2.5 hr ago' },
     ],
   },
   {
     id: 'agent-5',
-    name: 'DevOps',
-    type: 'devops',
-    status: 'working',
-    model: 'deepseek-v3',
-    icon: <Container className="h-4 w-4" />,
-    color: AGENT_COLORS.devops.color,
-    bgColor: AGENT_COLORS.devops.bg,
-    borderColor: AGENT_COLORS.devops.border,
-    capabilities: ['CI/CD', 'Docker', 'Monitoring', 'Deployment'],
+    name: 'SEO',
+    type: 'seo',
+    status: 'idle',
+    model: 'claude-4-sonnet',
+    icon: <Search className="h-4 w-4" />,
+    color: AGENT_COLORS.seo.color,
+    bgColor: AGENT_COLORS.seo.bg,
+    borderColor: AGENT_COLORS.seo.border,
+    capabilities: ['Meta Tags', 'Structured Data', 'Keyword Research', 'Sitemap Generation'],
     description:
-      'Manages infrastructure, deployment pipelines, and system monitoring. Configures Docker containers, CI/CD workflows, environment variables, and ensures smooth deployments across staging and production environments.',
-    tasksCompleted: 198,
-    tasksFailed: 14,
-    successRate: 93.4,
-    avgResponseTime: '4.2s',
+      'Optimizes storefronts for search engine visibility from day one. Generates optimized meta titles and descriptions, implements JSON-LD structured data for products and local business, researches target keywords, and produces sitemaps to ensure rapid indexing by search engines.',
+    tasksCompleted: 245,
+    tasksFailed: 4,
+    successRate: 98.4,
+    avgResponseTime: '2.0s',
     temperature: 0.2,
-    maxTokens: 6144,
+    maxTokens: 4096,
     recentExecutions: [
-      { id: 'e21', status: 'running', command: 'deploy --env staging --build', duration: '45.0s', timestamp: 'Just now' },
-      { id: 'e22', status: 'success', command: 'configure --docker compose staging', duration: '12.3s', timestamp: '10 min ago' },
-      { id: 'e23', status: 'success', command: 'setup --ci github-actions', duration: '18.7s', timestamp: '1 hr ago' },
-      { id: 'e24', status: 'failed', command: 'monitor --alert cpu-threshold', duration: '2.1s', timestamp: '2 hr ago' },
-      { id: 'e25', status: 'success', command: 'scale --service sandbox +2', duration: '8.4s', timestamp: '3 hr ago' },
+      { id: 'e21', status: 'success', command: 'optimize --meta-tags "vintage clothing boutique"', duration: '3.5s', timestamp: '15 min ago' },
+      { id: 'e22', status: 'success', command: 'schema --structured-data "local bakery products"', duration: '4.2s', timestamp: '40 min ago' },
+      { id: 'e23', status: 'success', command: 'research --keywords "organic baby products"', duration: '6.8s', timestamp: '1 hr ago' },
+      { id: 'e24', status: 'success', command: 'generate --sitemap "multi-page storefront"', duration: '1.4s', timestamp: '2 hr ago' },
+      { id: 'e25', status: 'success', command: 'optimize --alt-text "product image gallery"', duration: '2.9s', timestamp: '3 hr ago' },
     ],
   },
   {
     id: 'agent-6',
-    name: 'Security',
-    type: 'security',
-    status: 'error',
-    model: 'claude-4-opus',
-    icon: <Shield className="h-4 w-4" />,
-    color: AGENT_COLORS.security.color,
-    bgColor: AGENT_COLORS.security.bg,
-    borderColor: AGENT_COLORS.security.border,
-    capabilities: ['Code Audit', 'Vulnerability Scan', 'Auth Flows', 'Compliance'],
+    name: 'Deployment',
+    type: 'deployment',
+    status: 'working',
+    model: 'deepseek-v3',
+    icon: <Rocket className="h-4 w-4" />,
+    color: AGENT_COLORS.deployment.color,
+    bgColor: AGENT_COLORS.deployment.bg,
+    borderColor: AGENT_COLORS.deployment.border,
+    capabilities: ['Vercel Deploy', 'Cloudflare Pages', 'Custom Domains', 'SSL Certificates'],
     description:
-      'Performs comprehensive security audits, vulnerability scanning, and implements secure authentication flows. Ensures code compliance with OWASP standards and reviews dependency chains for known CVEs.',
-    tasksCompleted: 134,
-    tasksFailed: 8,
-    successRate: 94.4,
-    avgResponseTime: '5.6s',
+      'Handles end-to-end publishing of generated storefronts to production. Deploys to Vercel or Cloudflare Pages with one click, configures custom domains, provisions SSL certificates, and ensures the published site is live and accessible within minutes of generation.',
+    tasksCompleted: 198,
+    tasksFailed: 12,
+    successRate: 94.3,
+    avgResponseTime: '45.2s',
     temperature: 0.1,
-    maxTokens: 8192,
+    maxTokens: 2048,
     recentExecutions: [
-      { id: 'e26', status: 'failed', command: 'scan --cve --fix lodash@4.17.20', duration: '15.3s', timestamp: '3 min ago' },
-      { id: 'e27', status: 'success', command: 'audit --auth-flow JWT-refresh', duration: '8.9s', timestamp: '20 min ago' },
-      { id: 'e28', status: 'success', command: 'check --headers CSP-CORS', duration: '2.1s', timestamp: '45 min ago' },
-      { id: 'e29', status: 'success', command: 'review --pr #312 security-patch', duration: '11.4s', timestamp: '1.5 hr ago' },
-      { id: 'e30', status: 'failed', command: 'scan --dependency full-tree', duration: '22.1s', timestamp: '2 hr ago' },
+      { id: 'e26', status: 'running', command: 'deploy --vercel "Sweet Dreams Bakery production"', duration: '38.0s', timestamp: 'Just now' },
+      { id: 'e27', status: 'success', command: 'publish --cloudflare "fitness coaching site"', duration: '42.1s', timestamp: '20 min ago' },
+      { id: 'e28', status: 'success', command: 'domain --configure "shop.example.com CNAME"', duration: '8.3s', timestamp: '1 hr ago' },
+      { id: 'e29', status: 'success', command: 'ssl --provision "checkout.shop.example.com"', duration: '12.5s', timestamp: '2 hr ago' },
+      { id: 'e30', status: 'failed', command: 'deploy --vercel "auto parts mega-store"', duration: '60.0s', timestamp: '3 hr ago' },
     ],
   },
   {
     id: 'agent-7',
-    name: 'Testing',
-    type: 'testing',
-    status: 'working',
-    model: 'gemini-2.5-flash',
-    icon: <Search className="h-4 w-4" />,
-    color: AGENT_COLORS.testing.color,
-    bgColor: AGENT_COLORS.testing.bg,
-    borderColor: AGENT_COLORS.testing.border,
-    capabilities: ['Unit Tests', 'Integration', 'E2E Coverage', 'Visual Regression'],
+    name: 'Debug',
+    type: 'debug',
+    status: 'error',
+    model: 'claude-4-opus',
+    icon: <Bug className="h-4 w-4" />,
+    color: AGENT_COLORS.debug.color,
+    bgColor: AGENT_COLORS.debug.bg,
+    borderColor: AGENT_COLORS.debug.border,
+    capabilities: ['HTML Validation', 'CSS Linting', 'Accessibility Audit', 'Performance Analysis'],
     description:
-      'Generates and executes comprehensive test suites including unit tests, integration tests, E2E tests, and visual regression tests. Analyzes code coverage reports and suggests improvements to reach target thresholds.',
-    tasksCompleted: 421,
-    tasksFailed: 27,
-    successRate: 93.9,
-    avgResponseTime: '6.8s',
-    temperature: 0.15,
-    maxTokens: 4096,
+      'Rigorously validates every generated storefront before publication. Checks HTML5 compliance, lints CSS for inconsistencies, runs WCAG accessibility audits, and analyzes page performance scores to ensure every site meets professional quality standards.',
+    tasksCompleted: 534,
+    tasksFailed: 18,
+    successRate: 96.7,
+    avgResponseTime: '5.3s',
+    temperature: 0.1,
+    maxTokens: 8192,
     recentExecutions: [
-      { id: 'e31', status: 'running', command: 'test --integration auth-module', duration: '34.0s', timestamp: 'Just now' },
-      { id: 'e32', status: 'success', command: 'test --unit utils/format', duration: '4.2s', timestamp: '5 min ago' },
-      { id: 'e33', status: 'success', command: 'coverage --report --target 90%', duration: '18.9s', timestamp: '15 min ago' },
-      { id: 'e34', status: 'failed', command: 'test --e2e login-flow', duration: '42.3s', timestamp: '30 min ago' },
-      { id: 'e35', status: 'success', command: 'generate --unit AgentService', duration: '7.6s', timestamp: '1 hr ago' },
+      { id: 'e31', status: 'failed', command: 'validate --html "checkout form structure"', duration: '4.1s', timestamp: '3 min ago' },
+      { id: 'e32', status: 'success', command: 'lint --css "product page responsive breakpoints"', duration: '3.6s', timestamp: '18 min ago' },
+      { id: 'e33', status: 'success', command: 'audit --a11y "navigation keyboard focus traps"', duration: '8.9s', timestamp: '30 min ago' },
+      { id: 'e34', status: 'success', command: 'analyze --performance "image-heavy hero section"', duration: '6.2s', timestamp: '1 hr ago' },
+      { id: 'e35', status: 'success', command: 'validate --schema "product JSON-LD markup"', duration: '2.8s', timestamp: '2 hr ago' },
     ],
   },
   {
     id: 'agent-8',
-    name: 'Refactor',
-    type: 'refactor',
-    status: 'idle',
-    model: 'llama-4',
-    icon: <Wrench className="h-4 w-4" />,
-    color: AGENT_COLORS.refactor.color,
-    bgColor: AGENT_COLORS.refactor.bg,
-    borderColor: AGENT_COLORS.refactor.border,
-    capabilities: ['Code Quality', 'Tech Debt', 'Performance', 'Patterns'],
-    description:
-      'Identifies and resolves technical debt, improves code quality, and applies modern design patterns. Refactors legacy code, optimizes performance bottlenecks, and ensures adherence to project coding standards.',
-    tasksCompleted: 89,
-    tasksFailed: 6,
-    successRate: 93.7,
-    avgResponseTime: '3.4s',
-    temperature: 0.2,
-    maxTokens: 6144,
-    recentExecutions: [
-      { id: 'e36', status: 'success', command: 'refactor --pattern extract-component DashboardGrid', duration: '12.3s', timestamp: '25 min ago' },
-      { id: 'e37', status: 'success', command: 'optimize --perf render-loop AgentCard', duration: '8.7s', timestamp: '1 hr ago' },
-      { id: 'e38', status: 'success', command: 'clean --unused-imports src/', duration: '2.1s', timestamp: '2 hr ago' },
-      { id: 'e39', status: 'failed', command: 'refactor --extract-hook useAgentState', duration: '15.4s', timestamp: '3 hr ago' },
-      { id: 'e40', status: 'success', command: 'analyze --complexity src/services/', duration: '5.2s', timestamp: '4 hr ago' },
-    ],
-  },
-  {
-    id: 'agent-9',
-    name: 'Documentation',
-    type: 'documentation',
+    name: 'Repair',
+    type: 'repair',
     status: 'idle',
     model: 'claude-4-sonnet',
-    icon: <FileText className="h-4 w-4" />,
-    color: AGENT_COLORS.documentation.color,
-    bgColor: AGENT_COLORS.documentation.bg,
-    borderColor: AGENT_COLORS.documentation.border,
-    capabilities: ['README', 'API Docs', 'Code Comments', 'Guides'],
+    icon: <Wrench className="h-4 w-4" />,
+    color: AGENT_COLORS.repair.color,
+    bgColor: AGENT_COLORS.repair.bg,
+    borderColor: AGENT_COLORS.repair.border,
+    capabilities: ['Auto-Fix HTML', 'CSS Corrections', 'A11y Remediation', 'Performance Optimization'],
     description:
-      'Auto-generates comprehensive documentation including READMEs, API references, inline code comments, and developer guides. Maintains consistency across documentation and ensures all public APIs are well-documented.',
-    tasksCompleted: 167,
+      'Automatically fixes issues discovered by the Debug agent. Applies HTML corrections, resolves CSS conflicts, remediates accessibility violations, and optimizes performance bottlenecks — ensuring every storefront ships clean, fast, and fully accessible without manual intervention.',
+    tasksCompleted: 178,
     tasksFailed: 3,
-    successRate: 98.2,
-    avgResponseTime: '2.5s',
-    temperature: 0.3,
-    maxTokens: 4096,
+    successRate: 98.3,
+    avgResponseTime: '3.8s',
+    temperature: 0.15,
+    maxTokens: 6144,
     recentExecutions: [
-      { id: 'e41', status: 'success', command: 'generate --api-docs /api/routes', duration: '8.9s', timestamp: '40 min ago' },
-      { id: 'e42', status: 'success', command: 'update --readme installation-guide', duration: '4.3s', timestamp: '1.5 hr ago' },
-      { id: 'e43', status: 'success', command: 'comment --src/components/ dashboard', duration: '6.7s', timestamp: '2 hr ago' },
-      { id: 'e44', status: 'success', command: 'create --guide getting-started', duration: '11.2s', timestamp: '4 hr ago' },
-      { id: 'e45', status: 'failed', command: 'validate --docs --strict', duration: '3.1s', timestamp: '5 hr ago' },
+      { id: 'e36', status: 'success', command: 'fix --html "missing alt attributes on product images"', duration: '5.1s', timestamp: '25 min ago' },
+      { id: 'e37', status: 'success', command: 'correct --css "z-index stacking context checkout modal"', duration: '4.4s', timestamp: '1 hr ago' },
+      { id: 'e38', status: 'success', command: 'remediate --a11y "focus order on multi-step form"', duration: '7.2s', timestamp: '2 hr ago' },
+      { id: 'e39', status: 'success', command: 'optimize --performance "lazy-load below-fold images"', duration: '3.3s', timestamp: '3 hr ago' },
+      { id: 'e40', status: 'failed', command: 'fix --html "nested interactive element button"', duration: '6.8s', timestamp: '4 hr ago' },
     ],
   },
 ];
 
 const ORCHESTRATION_GRAPH = [
-  { id: 'frontend', name: 'Frontend', icon: <Code className="h-3.5 w-3.5" />, active: true },
-  { id: 'backend', name: 'Backend', icon: <Cpu className="h-3.5 w-3.5" />, active: false },
-  { id: 'database', name: 'Database', icon: <Database className="h-3.5 w-3.5" />, active: true },
-  { id: 'devops', name: 'DevOps', icon: <Container className="h-3.5 w-3.5" />, active: true },
-  { id: 'security', name: 'Security', icon: <Shield className="h-3.5 w-3.5" />, active: true },
-  { id: 'testing', name: 'Testing', icon: <Search className="h-3.5 w-3.5" />, active: true },
-  { id: 'refactor', name: 'Refactor', icon: <Wrench className="h-3.5 w-3.5" />, active: false },
-  { id: 'documentation', name: 'Docs', icon: <FileText className="h-3.5 w-3.5" />, active: false },
+  { id: 'branding', name: 'Branding', icon: <Palette className="h-3.5 w-3.5" />, active: true },
+  { id: 'ui', name: 'UI', icon: <Monitor className="h-3.5 w-3.5" />, active: true },
+  { id: 'content', name: 'Content', icon: <PenTool className="h-3.5 w-3.5" />, active: false },
+  { id: 'product', name: 'Product', icon: <Package className="h-3.5 w-3.5" />, active: true },
+  { id: 'seo', name: 'SEO', icon: <Search className="h-3.5 w-3.5" />, active: true },
+  { id: 'debug', name: 'Debug', icon: <Bug className="h-3.5 w-3.5" />, active: false },
 ];
 
 // ---------------------------------------------------------------------------
@@ -610,13 +574,9 @@ export function AgentsView() {
             Agent Orchestrator
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Manage and monitor your autonomous AI agent fleet
+            Voice-to-Website AI agent fleet — describe your business, get a storefront
           </p>
         </div>
-        <Button size="sm" className="gap-2">
-          <Plus className="h-3.5 w-3.5" />
-          Add Agent
-        </Button>
       </motion.div>
 
       {/* ================================================================ */}
@@ -633,7 +593,7 @@ export function AgentsView() {
                 </CardTitle>
                 <CardDescription className="mt-1">
                   {AGENTS.length} agents registered &middot; {summaryStats.activeCount} active
-                  &middot; {summaryStats.totalCompleted.toLocaleString()} tasks completed
+                  &middot; {summaryStats.totalCompleted.toLocaleString()} storefronts generated
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -663,7 +623,7 @@ export function AgentsView() {
             </div>
           </CardHeader>
           <CardContent className="pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               <AnimatePresence>
                 {AGENTS.map((agent, index) => {
                   const statusCfg = STATUS_CONFIG[agent.status];
@@ -774,7 +734,7 @@ export function AgentsView() {
                           <div className="grid grid-cols-3 gap-2">
                             <div>
                               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                Tasks
+                                Sites
                               </p>
                               <p className="text-sm font-bold mt-0.5">
                                 {agent.tasksCompleted}
@@ -826,7 +786,7 @@ export function AgentsView() {
                   Orchestration Graph
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Visual representation of agent interaction flow and data routing
+                  Voice-to-Website pipeline — from spoken description to published storefront
                 </CardDescription>
               </div>
               <Badge
@@ -845,40 +805,40 @@ export function AgentsView() {
           <CardContent className="pt-5">
             <div className="relative overflow-x-auto">
               {/* Flow diagram */}
-              <div className="min-w-[700px] mx-auto">
-                {/* Row 1: User → Planner */}
+              <div className="min-w-[780px] mx-auto">
+                {/* Row 1: Voice Input → Published Storefront */}
                 <div className="flex items-center justify-center gap-3 mb-6">
-                  {/* User Request */}
-                  <div className="flex items-center justify-center w-28 h-14 rounded-xl bg-primary/10 border border-primary/20">
+                  {/* Voice Input */}
+                  <div className="flex items-center justify-center w-32 h-14 rounded-xl bg-primary/10 border border-primary/20">
                     <div className="flex flex-col items-center gap-0.5">
-                      <Bot className="h-4 w-4 text-primary" />
+                      <Mic className="h-4 w-4 text-primary" />
                       <span className="text-xs font-semibold text-primary">
-                        User Request
+                        Voice Input
                       </span>
                     </div>
                   </div>
 
                   {/* Connector with animated dot */}
-                  <div className="relative w-24 h-0.5 bg-primary/20 overflow-hidden">
+                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
                     <DataFlowDot delay={0} />
                   </div>
 
-                  {/* Planner */}
-                  <div className="flex items-center justify-center w-32 h-14 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.15)]">
+                  {/* Business Understanding */}
+                  <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-violet-500/10 border border-violet-500/30 shadow-[0_0_12px_rgba(139,92,246,0.15)]">
                     <div className="flex flex-col items-center gap-0.5">
-                      <Zap className="h-4 w-4 text-amber-500" />
-                      <span className="text-xs font-semibold text-amber-500">
-                        Planner
+                      <Brain className="h-4 w-4 text-violet-500" />
+                      <span className="text-xs font-semibold text-violet-500">
+                        Business Understanding
                       </span>
                     </div>
                   </div>
 
                   {/* Connector with animated dot */}
-                  <div className="relative w-24 h-0.5 bg-primary/20 overflow-hidden">
+                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
                     <DataFlowDot delay={0.5} />
                   </div>
 
-                  {/* Agent Cluster */}
+                  {/* Agent Fleet */}
                   <div className="flex items-center justify-center w-32 h-14 rounded-xl bg-primary/10 border border-primary/20">
                     <div className="flex flex-col items-center gap-0.5">
                       <Layers className="h-4 w-4 text-primary" />
@@ -889,16 +849,31 @@ export function AgentsView() {
                   </div>
 
                   {/* Connector with animated dot */}
-                  <div className="relative w-24 h-0.5 bg-primary/20 overflow-hidden">
+                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
                     <DataFlowDot delay={1.0} />
                   </div>
 
-                  {/* Validated Output */}
-                  <div className="flex items-center justify-center w-28 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                  {/* Sandbox Validation */}
+                  <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.15)]">
                     <div className="flex flex-col items-center gap-0.5">
-                      <CheckCircle className="h-4 w-4 text-emerald-500" />
+                      <Bug className="h-4 w-4 text-amber-500" />
+                      <span className="text-xs font-semibold text-amber-500">
+                        Sandbox Validation
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Connector with animated dot */}
+                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
+                    <DataFlowDot delay={1.5} />
+                  </div>
+
+                  {/* Published Storefront */}
+                  <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Globe className="h-4 w-4 text-emerald-500" />
                       <span className="text-xs font-semibold text-emerald-500">
-                        Validated Output
+                        Published Storefront
                       </span>
                     </div>
                   </div>
@@ -922,7 +897,7 @@ export function AgentsView() {
                 </div>
 
                 {/* Row 2: Sub-agent nodes */}
-                <div className="grid grid-cols-4 gap-3 max-w-xl mx-auto">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 max-w-3xl mx-auto">
                   {ORCHESTRATION_GRAPH.map((node, idx) => {
                     const colors = AGENT_COLORS[node.id as AgentType];
                     return (
@@ -1039,7 +1014,7 @@ export function AgentsView() {
                       {selectedAgent.type}
                     </Badge>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      <Cpu className="h-2.5 w-2.5 mr-1" />
+                      <Bot className="h-2.5 w-2.5 mr-1" />
                       {selectedAgent.model}
                     </Badge>
                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -1074,7 +1049,7 @@ export function AgentsView() {
                   <div className="grid grid-cols-3 gap-3">
                     <div className="rounded-lg border p-3">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        Tasks Completed
+                        Sites Generated
                       </p>
                       <p className="text-2xl font-bold mt-1 text-emerald-500">
                         {selectedAgent.tasksCompleted}
@@ -1082,7 +1057,7 @@ export function AgentsView() {
                     </div>
                     <div className="rounded-lg border p-3">
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        Tasks Failed
+                        Sites Failed
                       </p>
                       <p className="text-2xl font-bold mt-1 text-red-500">
                         {selectedAgent.tasksFailed}
@@ -1101,7 +1076,7 @@ export function AgentsView() {
                   {/* Bar chart */}
                   <div className="rounded-lg border p-4">
                     <p className="text-xs font-medium text-muted-foreground mb-3">
-                      Task Outcomes
+                      Generation Outcomes
                     </p>
                     <div className="h-[200px] w-full">
                       <ResponsiveContainer width="100%" height="100%">
@@ -1226,7 +1201,7 @@ export function AgentsView() {
                       <div>
                         <p className="text-sm font-medium">Model</p>
                         <p className="text-[10px] text-muted-foreground">
-                          AI model used for inference
+                          AI model used for storefront generation
                         </p>
                       </div>
                       <Select defaultValue={selectedAgent.model}>
@@ -1236,10 +1211,9 @@ export function AgentsView() {
                         <SelectContent>
                           <SelectItem value="claude-4-opus">claude-4-opus</SelectItem>
                           <SelectItem value="claude-4-sonnet">claude-4-sonnet</SelectItem>
-                          <SelectItem value="gpt-5">gpt-5</SelectItem>
+                          <SelectItem value="gpt-4o">gpt-4o</SelectItem>
                           <SelectItem value="deepseek-v3">deepseek-v3</SelectItem>
                           <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
-                          <SelectItem value="llama-4">llama-4</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1251,7 +1225,7 @@ export function AgentsView() {
                       <div>
                         <p className="text-sm font-medium">Temperature</p>
                         <p className="text-[10px] text-muted-foreground">
-                          Controls randomness in generation
+                          Controls creativity in generation
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
@@ -1274,7 +1248,7 @@ export function AgentsView() {
                       <div>
                         <p className="text-sm font-medium">Max Tokens</p>
                         <p className="text-[10px] text-muted-foreground">
-                          Maximum response length
+                          Maximum storefront output length
                         </p>
                       </div>
                       <div className="flex items-center gap-3">

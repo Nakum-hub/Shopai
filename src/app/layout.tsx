@@ -14,24 +14,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "StoreCraft AI - Voice-to-Website Builder",
+  description: "Transform your voice into a professional storefront website. AI-powered website generation for small businesses — bakeries, salons, restaurants, boutiques, and more.",
+  keywords: ["voice-to-website", "AI website builder", "small business", "storefront", "bakery website", "salon website", "restaurant website", "boutique website", "AI website generator", "no-code website builder", "StoreCraft AI"],
+  authors: [{ name: "StoreCraft AI" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "StoreCraft AI - Voice-to-Website Builder",
+    description: "Transform your voice into a professional storefront website. AI-powered website generation for small businesses — bakeries, salons, restaurants, boutiques, and more.",
+    url: "https://storecraft.ai",
+    siteName: "StoreCraft AI",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
+    title: "StoreCraft AI - Voice-to-Website Builder",
+    description: "Transform your voice into a professional storefront website. AI-powered website generation for small businesses.",
   },
 };
 

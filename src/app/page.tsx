@@ -15,12 +15,14 @@ import { ProjectsView } from '@/components/projects/projects-view';
 import { TemplatesView } from '@/components/templates/templates-view';
 import { AnalyticsView } from '@/components/analytics/analytics-view';
 import { SettingsView } from '@/components/settings/settings-view';
+import { AgentsView } from '@/components/agents/agents-view';
 
 const viewComponents: Record<string, React.ComponentType> = {
   builder: BuilderView,
   preview: PreviewView,
   projects: ProjectsView,
   templates: TemplatesView,
+  agents: AgentsView,
   analytics: AnalyticsView,
   settings: SettingsView,
 };
