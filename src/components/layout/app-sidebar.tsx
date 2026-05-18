@@ -32,7 +32,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'builder', label: 'AI Builder', icon: Sparkles, badge: 'New', badgeColor: 'bg-emerald-500' },
+  { id: 'builder', label: 'AI Builder', icon: Sparkles },
   { id: 'preview', label: 'Preview', icon: Eye },
   { id: 'projects', label: 'My Storefronts', icon: FolderKanban, badge: '3', badgeColor: 'bg-sky-500' },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate },
@@ -100,7 +100,12 @@ export function AppSidebar() {
                     transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                   />
                 )}
-                <Icon className="h-4 w-4 shrink-0 relative z-10" />
+                <span className="relative shrink-0 z-10">
+                  <Icon className="h-4 w-4" />
+                  {item.id === 'builder' && (
+                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                  )}
+                </span>
                 <AnimatePresence>
                   {sidebarOpen && (
                     <motion.span

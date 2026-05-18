@@ -702,6 +702,40 @@ function EmptyState() {
         store.getState().addStorefront(newStorefront);
         store.getState().setCurrentStorefront(newStorefront);
 
+        // Persist to database
+        try {
+          const dbRes = await fetch('/api/storefronts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: newStorefront.name,
+              businessName: newStorefront.businessName,
+              category: newStorefront.category,
+              description: newStorefront.description,
+              html: newStorefront.html,
+              businessProfile: newStorefront.businessProfile,
+            }),
+          });
+
+          if (dbRes.ok) {
+            const dbData = await dbRes.json();
+            if (dbData.storefront?.id) {
+              // Replace temp storefront with DB-persisted version (real ID)
+              const persisted = { ...newStorefront, id: dbData.storefront.id };
+              const currentStorefronts = store.getState().storefronts;
+              store.getState().setStorefronts([
+                persisted,
+                ...currentStorefronts.filter((s) => s.id !== newStorefront.id),
+              ]);
+              store.getState().setCurrentStorefront(persisted);
+            }
+          } else {
+            console.error('Failed to persist storefront to DB:', await dbRes.text());
+          }
+        } catch (dbErr) {
+          console.error('DB persistence error:', dbErr);
+        }
+
         toast({
           title: 'Website Generated!',
           description: 'Your storefront has been created with AI. You can preview it now.',
@@ -868,6 +902,24 @@ export function PreviewView() {
             status: 'ready',
             updatedAt: new Date().toISOString(),
           });
+
+          // Persist to database
+          try {
+            const dbRes = await fetch('/api/storefronts', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: currentStorefront.id,
+                html: data.html,
+                status: 'ready',
+              }),
+            });
+            if (!dbRes.ok) {
+              console.error('Failed to persist storefront update to DB:', await dbRes.text());
+            }
+          } catch (dbErr) {
+            console.error('DB persistence error:', dbErr);
+          }
         }
 
         toast({

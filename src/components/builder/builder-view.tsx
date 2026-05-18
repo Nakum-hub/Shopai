@@ -714,7 +714,7 @@ function VoiceInputSection() {
 
   // Helper to finalize generation with the generated HTML
   const finalizeGeneration = useCallback(
-    (generatedHtml: string, storefrontId: string, profile: BusinessProfile) => {
+    async (generatedHtml: string, storefrontId: string, profile: BusinessProfile) => {
       const now = new Date().toISOString();
 
       // Create a new storefront with the generated HTML
@@ -737,6 +737,7 @@ function VoiceInputSection() {
         deploymentUrl: null,
       };
 
+      // Store in Zustand memory immediately (fast UI response)
       addStorefront(newStorefront);
       setCurrentStorefront(newStorefront);
       updateGenerationStatus('complete', 'Website generated successfully!', 100);
@@ -747,6 +748,38 @@ function VoiceInputSection() {
         title: 'Website Generated!',
         description: 'Your storefront is ready for preview.',
       });
+
+      // Persist to SQLite database in the background (non-blocking)
+      // If DB save fails, the storefront still works in-memory
+      try {
+        const res = await fetch('/api/storefronts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: newStorefront.name,
+            businessName: newStorefront.businessName,
+            category: newStorefront.category,
+            description: newStorefront.description,
+            html: generatedHtml,
+            businessProfile: profile,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const dbId = data.storefront?.id;
+          if (dbId) {
+            // Update Zustand with the real DB ID so future operations use it
+            useAppStore.getState().updateStorefront(storefrontId, { id: dbId });
+            console.log('[Builder] Storefront persisted to DB with id:', dbId);
+          }
+        } else {
+          console.error('[Builder] Failed to persist storefront to DB:', res.status, await res.text());
+        }
+      } catch (dbError) {
+        // Don't block the UI — the storefront is already in Zustand memory
+        console.error('[Builder] DB persistence error (non-fatal):', dbError);
+      }
     },
     [addStorefront, setCurrentStorefront, updateGenerationStatus, showToast]
   );
@@ -879,11 +912,20 @@ function VoiceInputSection() {
             // Already completed via WebSocket, update the HTML
             const currentStorefront = useAppStore.getState().currentStorefront;
             if (currentStorefront) {
-              // Update the existing storefront with the real HTML
+              // Update the existing storefront with the real HTML in Zustand
               useAppStore.getState().updateStorefront(currentStorefront.id, {
                 html: data.html,
                 updatedAt: new Date().toISOString(),
               });
+
+              // Also sync the generated HTML to the database (non-blocking)
+              fetch('/api/storefronts', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: currentStorefront.id, html: data.html }),
+              }).catch((dbErr) =>
+                console.error('[Builder] Failed to sync HTML to DB (non-fatal):', dbErr)
+              );
             }
           } else if (
             useAppStore.getState().currentJob?.status === 'complete' ||

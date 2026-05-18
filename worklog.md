@@ -306,3 +306,108 @@ Stage Summary:
 - Analytics fully wired to real API across projects and analytics views
 - Dynamic change indicators with proper color coding
 - Graceful loading/error states throughout
+
+---
+Task ID: 5-a
+Agent: Preview DB Persistence Fix
+Task: Make preview view generate/regenerate buttons persist to database
+
+Work Log:
+- Read `src/components/preview/preview-view.tsx` to understand current state-only updates
+- Modified `EmptyState.handleGenerateWithAI` (line ~702): Added `POST /api/storefronts` call after `addStorefront`/`setCurrentStorefront`. On success, replaces the temp storefront (with `storefront-${Date.now()}` ID) in Zustand with the real DB-persisted version using the actual database ID. Wrapped in try/catch so DB failures don't break the UX.
+- Modified `PreviewView.handleGenerate` (line ~898): Added `PATCH /api/storefronts` call after `updateStorefront` to persist regenerated HTML and status to the database. Wrapped in try/catch with console.error on failure — non-blocking so the Zustand state update still works.
+- Both edits only touch the two target functions — no other code changed.
+- Lint passes with zero errors.
+
+Stage Summary:
+- `handleGenerateWithAI` now POSTs to `/api/storefronts` and swaps the temp ID for the real DB ID
+- `handleGenerate` (Regenerate button) now PATCHes `/api/storefronts` to save updated HTML to DB
+- Error handling is non-blocking: DB failures log to console but don't prevent UI updates
+- Lint: clean
+
+---
+Task ID: 5-a
+Agent: Settings Persistence
+Task: Add localStorage persistence for user settings
+
+Work Log:
+- Read `/home/z/my-project/src/store/app-store.ts` to understand current store structure
+- Added `STORAGE_KEY` constant (`'storecraft-settings'`) and `loadPersistedSettings()` helper function
+- `loadPersistedSettings()` reads from localStorage on init, parses JSON with try/catch, and merges saved settings over `defaultSettings` so new fields are never missing
+- SSR-safe: checks `typeof window !== 'undefined'` before accessing localStorage
+- Updated store init: `settings` now initialized via `loadPersistedSettings()` instead of raw `defaultSettings`
+- Updated `updateSettings`: wraps the `set()` call to compute the next settings object, then writes it to localStorage via `localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next))`, with try/catch for storage errors
+- Lint passes cleanly with zero errors
+
+Stage Summary:
+- File modified: `src/store/app-store.ts`
+- User settings now persist across page refreshes via localStorage
+- Forward-compatible: saved settings merged with defaults so new fields get default values
+- SSR-safe and error-tolerant (try/catch around all localStorage access)
+
+---
+Task ID: 5-a
+Agent: DB Persistence Fix
+Task: Save generated storefronts to database
+
+Work Log:
+- Updated `finalizeGeneration` in `builder-view.tsx` to call `POST /api/storefronts` after `addStorefront`
+- Made `finalizeGeneration` async to support the background DB call
+- On successful DB creation, updates the Zustand storefront ID from temp (`sf-${Date.now()}`) to the real CUID database ID
+- Added non-blocking error handling: DB failures log to console but don't block the UI
+- Updated the `handleGenerateWebsite` late-HTML path: when API HTML arrives after WebSocket completion, also calls `PATCH /api/storefronts` to sync the HTML to DB
+- Verified lint passes with 0 errors
+
+Stage Summary:
+- Generated storefronts now persist to SQLite database
+- Projects view will show real generated websites
+- DB IDs replace temporary client-side IDs in Zustand for consistency
+- All DB calls are fire-and-forget with error logging
+
+---
+Task ID: 6-a
+Agent: UI Polish Agent
+Task: Add sticky footer and polish sidebar badges
+
+Work Log:
+- Added professional sticky footer to `src/app/page.tsx` between `</main>` and closing `</div>`
+  - Uses `mt-auto` for natural push-down within flex-col container
+  - Three-column layout: "© 2025 StoreCraft AI" (left), "Voice-to-Website Platform" (center), "v1.0.0" (right)
+  - Styled with `py-3 px-6`, `bg-card/50 backdrop-blur-sm border-t border-border`, `text-xs text-muted-foreground`
+- Updated `src/components/layout/app-sidebar.tsx`:
+  - Removed hardcoded `badge: 'New'` from builder nav item (kept clean)
+  - Kept projects `badge: '3'` with `badgeColor: 'bg-sky-500'`
+  - Added pulsing green dot (`bg-emerald-500 animate-pulse`) on builder icon to indicate active/recommended action
+- Lint passes with 0 errors
+
+Stage Summary:
+- Footer: minimal, professional, sticky at bottom via flex + mt-auto
+- Sidebar: builder item now has a subtle pulsing green status dot instead of "New" badge
+- Both changes are minimal and non-breaking
+
+---
+Task ID: 5-b
+Agent: Main Orchestrator
+Task: Comprehensive accuracy and trustworthiness improvements
+
+Work Log:
+- Fixed store reference bug: `import('./types')` → `import('@/lib/types')` in app-store.ts
+- Added database persistence to builder-view.tsx finalizeGeneration (POST /api/storefronts)
+- Added database persistence to builder-view.tsx late-HTML path (PATCH /api/storefronts)
+- Added database persistence to preview-view.tsx handleGenerate (PATCH /api/storefronts)
+- Added database persistence to preview-view.tsx EmptyState (POST /api/storefronts)
+- Added localStorage settings persistence in app-store.ts (load on init, save on update)
+- Added professional sticky footer to page.tsx with copyright and version
+- Polished sidebar: removed hardcoded "New" badge, added pulsing green dot on Builder
+- Started generation WebSocket service on port 3002
+- Verified all 5 API endpoints working (storefronts, templates, chat, extract-profile, analytics)
+- Verified website generation produces valid HTML (18,332 chars)
+- Verified full DB persistence flow (POST → GET → DELETE)
+- All tests pass: 0 lint errors, clean compilation, all APIs respond correctly
+
+Stage Summary:
+- Critical trust issue fixed: generated storefronts now persist to SQLite database
+- Settings survive page refreshes via localStorage
+- Professional footer added with proper sticky behavior
+- All API endpoints verified working end-to-end
+- Generation service running on port 3002

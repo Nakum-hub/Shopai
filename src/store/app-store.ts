@@ -38,7 +38,7 @@ interface AppState {
   currentJob: GenerationJob | null;
   setCurrentJob: (job: GenerationJob | null) => void;
   updateGenerationStatus: (status: GenerationStatus, message?: string, progress?: number) => void;
-  addGenerationLog: (log: Omit<import('./types').GenerationLog, 'id' | 'timestamp'>) => void;
+  addGenerationLog: (log: Omit<import('@/lib/types').GenerationLog, 'id' | 'timestamp'>) => void;
   isGenerating: boolean;
 
   // Business Profile (from voice/text input)
@@ -106,6 +106,25 @@ const defaultSettings: PlatformSettings = {
   analyticsEnabled: true,
   seoAutoGenerate: true,
 };
+
+// =============================================================================
+// localStorage Persistence
+// =============================================================================
+
+const SETTINGS_STORAGE_KEY = 'storecraft-settings';
+
+function loadPersistedSettings(): PlatformSettings {
+  try {
+    if (typeof window === 'undefined') return defaultSettings;
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) return defaultSettings;
+    const saved = JSON.parse(raw) as Partial<PlatformSettings>;
+    // Merge with defaults so new fields added later are never missing
+    return { ...defaultSettings, ...saved };
+  } catch {
+    return defaultSettings;
+  }
+}
 
 // =============================================================================
 // Store
@@ -201,9 +220,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAnalytics: (analytics) => set({ analytics }),
 
   // Settings
-  settings: defaultSettings,
+  settings: loadPersistedSettings(),
   updateSettings: (updates) =>
-    set((state) => ({ settings: { ...state.settings, ...updates } })),
+    set((state) => {
+      const next = { ...state.settings, ...updates };
+      // Persist to localStorage
+      try {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
+        }
+      } catch {
+        // Storage full or unavailable – silently ignore
+      }
+      return { settings: next };
+    }),
 
   // Agents
   agents: [],

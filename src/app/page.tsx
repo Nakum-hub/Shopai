@@ -44,6 +44,13 @@ function AppContent() {
         <main className="flex-1 p-6 overflow-auto">
           <ViewComponent />
         </main>
+        <footer className="mt-auto py-3 px-6 bg-card/50 backdrop-blur-sm border-t border-border">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>© 2025 StoreCraft AI</span>
+            <span>Voice-to-Website Platform</span>
+            <span>v1.0.0</span>
+          </div>
+        </footer>
       </div>
     </div>
   );
