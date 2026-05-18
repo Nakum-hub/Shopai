@@ -1,12 +1,10 @@
 'use client';
 
 import React from 'react';
-import { Bell, Search, Moon, Sun, Command } from 'lucide-react';
+import { Bell, Moon, Sun, Globe } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -18,13 +16,21 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 const viewTitles: Record<string, string> = {
-  dashboard: 'Dashboard',
-  workspace: 'Workspace',
-  agents: 'Agent Orchestrator',
-  projects: 'Projects',
-  sandbox: 'Sandbox',
-  memory: 'Memory & Knowledge',
+  builder: 'AI Builder',
+  preview: 'Storefront Preview',
+  projects: 'My Storefronts',
+  templates: 'Templates',
+  analytics: 'Analytics',
   settings: 'Settings',
+};
+
+const viewDescriptions: Record<string, string> = {
+  builder: 'Describe your business and let AI build your storefront',
+  preview: 'Preview and customize your generated storefront',
+  projects: 'Manage all your generated storefronts',
+  templates: 'Browse business-specific templates',
+  analytics: 'Track storefront performance and insights',
+  settings: 'Configure your platform preferences',
 };
 
 export function AppHeader() {
@@ -38,23 +44,12 @@ export function AppHeader() {
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background/80 backdrop-blur-md px-6">
       <div className="flex items-center gap-2">
         <h1 className="text-base font-semibold">{viewTitles[currentView] || 'Dashboard'}</h1>
+        <span className="hidden sm:inline text-xs text-muted-foreground">
+          — {viewDescriptions[currentView] || ''}
+        </span>
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        {/* Command Palette Trigger */}
-        <Button variant="ghost" size="sm" className="hidden sm:flex gap-2 text-muted-foreground h-8 px-3 text-xs">
-          <Command className="h-3.5 w-3.5" />
-          <span>Search</span>
-          <kbd className="pointer-events-none ml-1 inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-            <span className="text-xs">⌘</span>K
-          </kbd>
-        </Button>
-
-        {/* Search (mobile) */}
-        <Button variant="ghost" size="icon" className="sm:hidden h-8 w-8">
-          <Search className="h-4 w-4" />
-        </Button>
-
         {/* Theme Toggle */}
         {mounted && (
           <Button
@@ -83,16 +78,16 @@ export function AppHeader() {
             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="flex flex-col items-start gap-1">
-              <span className="text-sm font-medium">Planner Agent completed task</span>
-              <span className="text-xs text-muted-foreground">Generated task DAG for project "E-Commerce Platform"</span>
+              <span className="text-sm font-medium">Storefront published successfully</span>
+              <span className="text-xs text-muted-foreground">Sweet Dreams Bakery is now live</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="flex flex-col items-start gap-1">
-              <span className="text-sm font-medium">Sandbox execution passed</span>
-              <span className="text-xs text-muted-foreground">All 47 tests passed in isolated environment</span>
+              <span className="text-sm font-medium">SEO score improved to 92</span>
+              <span className="text-xs text-muted-foreground">Auto-optimization applied to meta tags</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="flex flex-col items-start gap-1">
-              <span className="text-sm font-medium">Frontend Agent working</span>
-              <span className="text-xs text-muted-foreground">Building responsive dashboard layout...</span>
+              <span className="text-sm font-medium">New template available</span>
+              <span className="text-xs text-muted-foreground">Restaurant Pro v2.0 — with online ordering</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -102,8 +97,8 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
               <Avatar className="h-7 w-7">
-                <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                  AF
+                <AvatarFallback className="text-xs bg-gradient-to-br from-violet-600 to-cyan-500 text-white">
+                  SC
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -111,13 +106,12 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>AgentForge User</span>
-                <span className="text-xs font-normal text-muted-foreground">Pro Plan</span>
+                <span>StoreCraft User</span>
+                <span className="text-xs font-normal text-muted-foreground">Free Plan</span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Preferences</DropdownMenuItem>
             <DropdownMenuItem>Documentation</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="text-destructive">Sign out</DropdownMenuItem>

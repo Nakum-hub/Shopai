@@ -2,16 +2,16 @@
 
 import React from 'react';
 import {
-  LayoutDashboard,
-  Code2,
-  Bot,
+  Sparkles,
+  Eye,
   FolderKanban,
-  Container,
-  Brain,
+  LayoutTemplate,
+  BarChart3,
   Settings,
-  Zap,
   ChevronLeft,
   ChevronRight,
+  Globe,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
@@ -27,15 +27,15 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: string;
+  badgeColor?: string;
 }
 
 const navItems: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'workspace', label: 'Workspace', icon: Code2 },
-  { id: 'agents', label: 'Agents', icon: Bot, badge: 'Live' },
-  { id: 'projects', label: 'Projects', icon: FolderKanban },
-  { id: 'sandbox', label: 'Sandbox', icon: Container },
-  { id: 'memory', label: 'Memory', icon: Brain },
+  { id: 'builder', label: 'AI Builder', icon: Sparkles, badge: 'New', badgeColor: 'bg-emerald-500' },
+  { id: 'preview', label: 'Preview', icon: Eye },
+  { id: 'projects', label: 'My Storefronts', icon: FolderKanban, badge: '3', badgeColor: 'bg-sky-500' },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -52,9 +52,9 @@ export function AppSidebar() {
         )}
       >
         {/* Logo */}
-        <div className="flex h-14 items-center gap-2 px-3 border-b border-border">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary">
-            <Zap className="h-4 w-4 text-primary-foreground" />
+        <div className="flex h-14 items-center gap-2.5 px-3 border-b border-border">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-cyan-500 shadow-lg shadow-violet-500/20">
+            <Globe className="h-4 w-4 text-white" />
           </div>
           <AnimatePresence>
             {sidebarOpen && (
@@ -65,8 +65,10 @@ export function AppSidebar() {
                 transition={{ duration: 0.2 }}
                 className="overflow-hidden whitespace-nowrap"
               >
-                <span className="text-sm font-bold tracking-tight">AgentForge</span>
-                <span className="ml-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">OS</span>
+                <span className="text-sm font-bold tracking-tight bg-gradient-to-r from-violet-600 to-cyan-500 bg-clip-text text-transparent">
+                  StoreCraft
+                </span>
+                <span className="ml-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">AI</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -112,8 +114,10 @@ export function AppSidebar() {
                 </AnimatePresence>
                 {sidebarOpen && item.badge && (
                   <Badge
-                    variant="outline"
-                    className="ml-auto text-[10px] px-1.5 py-0 h-4 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                    className={cn(
+                      'ml-auto text-[10px] px-1.5 py-0 h-4 text-white border-0',
+                      item.badgeColor || 'bg-primary'
+                    )}
                   >
                     {item.badge}
                   </Badge>
@@ -128,7 +132,7 @@ export function AppSidebar() {
                   <TooltipContent side="right" className="flex items-center gap-2">
                     {item.label}
                     {item.badge && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 border-emerald-500/30 text-emerald-600">
+                      <Badge className={cn('text-[10px] px-1.5 py-0 h-4 text-white border-0', item.badgeColor)}>
                         {item.badge}
                       </Badge>
                     )}
@@ -140,6 +144,28 @@ export function AppSidebar() {
             return button;
           })}
         </nav>
+
+        {/* Pro Badge / CTA */}
+        {sidebarOpen && (
+          <div className="px-3 mb-2">
+            <div className="rounded-xl bg-gradient-to-br from-violet-600/10 to-cyan-500/10 border border-violet-500/20 p-3.5">
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="h-4 w-4 text-violet-500" />
+                <span className="text-xs font-semibold">Voice-to-Website</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Speak your business details and watch AI build your storefront instantly
+              </p>
+              <Button
+                size="sm"
+                className="w-full mt-2.5 h-7 text-xs bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-0 hover:opacity-90"
+                onClick={() => setCurrentView('builder')}
+              >
+                Try Now
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="border-t border-border p-2">

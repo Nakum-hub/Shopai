@@ -7,99 +7,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Project {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  status      String   @default("active") // active, paused, completed, failed
-  framework   String   @default("nextjs")
-  stack       String   @default("typescript")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model Storefront {
+  id              String   @id @default(cuid())
+  name            String
+  businessName    String
+  category        String   @default("other")
+  status          String   @default("draft") // draft, generating, ready, published, error
+  description     String?
+  url             String?
+  html            String?  // generated HTML
+  businessProfile String?  // JSON business profile
+  deploymentStatus String  @default("none")
+  deploymentUrl   String?
+  publishedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  tasks       Task[]
-  executions  Execution[]
-  memories    Memory[]
+  analytics       StorefrontAnalytics[]
+  generationJobs  GenerationJob[]
 }
 
-model Agent {
-  id          String   @id @default(cuid())
-  name        String
-  type        String   // planner, frontend, backend, database, devops, security, testing, refactor, documentation
-  status      String   @default("idle") // idle, working, error, completed
-  model       String   @default("claude-4-opus")
-  description String?
-  capabilities String   // JSON array of capabilities
-  config      String?  // JSON config
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model StorefrontAnalytics {
+  id              String   @id @default(cuid())
+  storefrontId    String
+  totalViews      Int      @default(0)
+  uniqueVisitors Int      @default(0)
+  avgDuration     Int      @default(0) // seconds
+  bounceRate      Float    @default(0)
+  seoScore        Int      @default(0)
+  performanceScore Int    @default(0)
+  accessibilityScore Int  @default(0)
+  date            String   // YYYY-MM-DD
+  createdAt       DateTime @default(now())
 
-  tasks       Task[]      @relation("AgentTasks")
-  executions  Execution[] @relation("AgentExecutions")
+  storefront      Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
 }
 
-model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  status      String   @default("pending") // pending, running, completed, failed, retrying
-  priority    String   @default("medium") // low, medium, high, critical
-  type        String   @default("feature") // feature, bugfix, refactor, test, deploy, documentation
-  agentId     String?
-  projectId   String
-  parentId    String?
-  order       Int      @default(0)
-  metadata    String?  // JSON metadata
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model GenerationJob {
+  id              String   @id @default(cuid())
+  storefrontId    String
+  status          String   @default("idle")
+  progress        Int      @default(0)
+  message         String?
+  voiceTranscript String?
+  logs            String?  // JSON array of logs
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
 
-  agent       Agent?   @relation("AgentTasks", fields: [agentId], references: [id], onDelete: SetNull)
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent      Task?    @relation("TaskTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Task[]   @relation("TaskTree")
-  executions  Execution[]
+  storefront      Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
 }
 
-model Execution {
-  id          String   @id @default(cuid())
-  status      String   @default("pending") // pending, running, success, failed, timeout
-  type        String   @default("build") // build, test, deploy, lint, custom
-  command     String?
-  output      String?  // stdout
-  error       String?  // stderr
-  duration    Int?     // ms
-  sandbox     String?  // sandbox ID
-  metadata    String?  // JSON metadata (screenshots, logs, etc.)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  agentId     String?
-  projectId   String
-  taskId      String?
-
-  agent       Agent?   @relation("AgentExecutions", fields: [agentId], references: [id], onDelete: SetNull)
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task        Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+model Template {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  category        String   @default("other")
+  preview         String?
+  sections        String?  // JSON sections config
+  style           String?  // JSON brand style
+  popular         Boolean  @default(false)
+  featured        Boolean  @default(false)
+  downloadCount   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
-model Memory {
-  id          String   @id @default(cuid())
-  type        String   @default("file") // file, vector, graph, session
-  key         String
-  value       String   // can be text, JSON, embeddings reference
-  projectId   String
-  tags        String?  // comma-separated tags
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  project     Project  @relation(fields: [projectId], references: [id])
-}
-
-model Activity {
-  id          String   @id @default(cuid())
-  type        String   // agent_start, agent_complete, task_created, execution_start, execution_complete, error, info
-  title       String
-  description String?
-  metadata    String?  // JSON metadata
-  createdAt   DateTime @default(now())
+model ChatHistory {
+  id              String   @id @default(cuid())
+  sessionId       String
+  role            String   // user, assistant, system
+  content         String
+  metadata        String?  // JSON metadata
+  createdAt       DateTime @default(now())
 }
