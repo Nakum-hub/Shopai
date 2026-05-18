@@ -496,3 +496,146 @@ Stage Summary:
 - New Socket.IO event: `generation_html` emits final HTML on completion
 - Backward compatible: same events (`session_assigned`, `generation_progress`, `generation_complete`)
 - Service running on port 3002, verified with Socket.IO handshake test
+
+---
+Task ID: 8
+Agent: Security & Sandbox Builder
+Task: Build sandbox isolation for preview system and security hardening
+
+Work Log:
+- Created `src/lib/html-sanitizer.ts` — comprehensive HTML sanitizer for generated content:
+  - `SanitizeResult` interface with html, warnings[], scriptsRemoved, framesRemoved, externalLinksRemoved
+  - `sanitizeGeneratedHtml(html)` function with 9 sanitization stages:
+    1. Remove `<meta http-equiv="refresh">` (redirect prevention)
+    2. Remove `<script>` tags with external `src` attributes
+    3. Remove `<iframe>`, `<embed>`, `<object>` tags (nesting prevention)
+    4. Remove `<link rel="import">` and external stylesheet imports
+    5. Remove `<form>` with external action URLs
+    6. Sanitize inline `<script>` content: strip window.open, document.location, eval(), document.cookie, localStorage/sessionStorage, postMessage, XMLHttpRequest
+    7. Sanitize `href` attributes: remove `javascript:` and `data:` URIs, block external URLs
+    8. Sanitize `img src` attributes: only allow `https://placehold.co` and `data:` URIs
+    9. Sanitize remaining `form action` attributes: remove `javascript:` actions
+- Created `src/components/preview/sandboxed-preview.tsx` — sandboxed iframe component:
+  - Renders HTML inside `<iframe sandbox="allow-scripts allow-same-origin">` with `srcdoc`
+  - Prevents generated code from accessing parent page cookies/storage
+  - Security banner showing "Sandbox Preview Mode" with Shield icon
+  - Expandable sanitization report showing all removed elements with counts
+  - "Download HTML" button to export the generated page as .html file
+  - Uses `referrerPolicy="no-referrer"` for additional privacy
+  - AnimatePresence for smooth warning panel open/close
+  - Responsive design with mobile-friendly Download button text
+- Created `src/app/api/security/headers/route.ts` — CSP security headers API:
+  - Returns full security header configuration (GET endpoint)
+  - Content-Security-Policy: default-src 'self', script-src, style-src, font-src, img-src, connect-src (ws/wss), frame-src, object-src 'none', base-uri 'self', form-action 'self'
+  - X-Content-Type-Options: nosniff
+  - X-Frame-Options: DENY
+  - Referrer-Policy: strict-origin-when-cross-origin
+  - X-XSS-Protection: 1; mode=block
+  - Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+- Updated `src/components/preview/preview-view.tsx`:
+  - Added import for SandboxedPreview component
+  - Replaced plain `<iframe srcDoc={displayHtml} sandbox="allow-scripts">` with `<SandboxedPreview>` component
+  - SandboxedPreview receives html, title, businessName, height, and className props
+  - Preserved existing loading overlay and browser chrome
+- Updated `src/app/layout.tsx` for security hardening:
+  - Added CSP via `metadata.other['Content-Security-Policy']` for the main application
+  - Added `<meta httpEquiv="X-Content-Type-Options" content="nosniff" />` in `<head>`
+  - Added `<meta httpEquiv="X-Frame-Options" content="DENY" />` in `<head>`
+  - Added `<meta name="referrer" content="strict-origin-when-cross-origin" />` in `<head>`
+- Lint passes with zero errors
+
+Stage Summary:
+- New file: `src/lib/html-sanitizer.ts` — 9-stage HTML sanitizer with detailed reporting
+- New file: `src/components/preview/sandboxed-preview.tsx` — sandboxed iframe with security banner + download
+- New file: `src/app/api/security/headers/route.ts` — security headers configuration API
+- Updated: `src/components/preview/preview-view.tsx` — uses SandboxedPreview instead of raw iframe
+- Updated: `src/app/layout.tsx` — CSP meta tag + X-Content-Type-Options + X-Frame-Options + Referrer-Policy
+- Generated content is now isolated: sandboxed iframe prevents parent page access
+- Dangerous elements (external scripts, frames, javascript: URIs, external forms) stripped before render
+- Inline scripts preserved but sanitized (eval, window.open, document.location removed)
+- Lint: 0 errors
+
+---
+Task ID: 9
+Agent: Backend Infrastructure Builder
+Task: Build deterministic workflow engine, pipeline tracking API, semantic memory, BI engine, and security middleware
+
+Work Log:
+- Added `SemanticMemory` model to Prisma schema with fields: id, sessionId, category, key, value, confidence, source, expiresAt, timestamps
+  - Unique constraint on (sessionId, key) for upsert behavior
+  - Indexes on sessionId, category, key for fast lookup
+  - Supports 4 categories: business_profile, user_preference, generation_insight, conversation_fact
+  - Supports 4 sources: voice, chat, generation, system
+- Pushed schema to database via `bun run db:push --accept-data-loss && bun run db:generate`
+
+- Created `src/app/api/pipeline/route.ts` — Pipeline Execution Tracking API:
+  - GET /api/pipeline?status=completed&limit=20&offset=0&sessionId=xxx — List executions with filters
+  - GET /api/pipeline?executionId=xxx — Get single execution with all logs
+  - Returns aggregate stats: total, completed, failed, avgDurationMs, avgValidationScore
+  - Pagination support with limit/offset
+  - 404 handling for missing execution IDs
+
+- Created `src/lib/semantic-memory.ts` — Persistent Semantic Memory System:
+  - `storeMemory(sessionId, category, key, value, options?)` — Upsert memory with confidence, source, TTL
+  - `recallByCategory(sessionId, category)` — Get all memories for a session by category
+  - `searchMemories(sessionId, query)` — Token-based relevance search across key+value fields, sorted by score
+  - `assembleBusinessProfile(sessionId)` — Reconstruct full business profile from memory fragments (handles JSON values)
+  - `consolidateProfile(sessionId, profile)` — Merge profile data into memories (JSON-serializes nested objects)
+  - `getMemorySessions()` — Get all unique session IDs with stored memories
+  - `clearSessionMemories(sessionId)` — Delete all memories for a session
+  - `deleteMemory(sessionId, key)` — Delete a specific memory
+  - `getMemoryStats(sessionId)` — Get total count, byCategory, bySource, avgConfidence
+  - Automatic expiry filtering on all read operations
+
+- Created `src/lib/business-intelligence.ts` — Business Intelligence Engine:
+  - `HealthScore` interface: overall, content, seo, performance, accessibility, engagement, generation (all 0-100)
+  - `Insight` interface: type (strength/warning/opportunity/critical), category, title, description, action, impact
+  - `BIReport` interface: healthScore, insights, recommendations, generatedAt, summary
+  - `generateBIReport(storefrontId)` — Full BI analysis:
+    - HTML quality analysis: content depth, H1/H2, word count → content score
+    - SEO analysis: title, meta description, H1, lang attr → seo score
+    - Performance analysis: self-contained pages, modern layout (flex/grid) → performance score
+    - Accessibility analysis: alt text, lang, viewport → a11y score
+    - Engagement analysis: views, avg duration, bounce rate, visitor ratio → engagement score
+    - Generation reliability: success rate, avg validation score, consistency → generation score
+    - Overall: weighted average (content 20%, seo 20%, perf 10%, a11y 10%, engagement 15%, generation 25%)
+    - 5 insight generators: content, SEO, business (status/profile completeness), engagement, generation
+    - Sorted insights (critical → warning → opportunity → strength)
+    - Auto-generated recommendations from non-strength insights
+    - Dynamic summary based on health score tier
+
+- Created `src/app/api/bi/route.ts` — Business Intelligence API:
+  - GET /api/bi?storefrontId=xxx — Full BI report (default)
+  - GET /api/bi?storefrontId=xxx&mode=health — Health score only
+  - GET /api/bi?storefrontId=xxx&mode=insights — Insights + recommendations only
+  - Rate limiting (30 req/60s per client IP)
+  - 404 for missing storefronts, 400 for missing storefrontId
+
+- Created `src/lib/security.ts` — Security Middleware:
+  - `sanitizeHtmlOutput(html)` — Multi-layer XSS prevention:
+    - Strips 30+ dangerous event handler attributes (onclick, onerror, onload, onfocus, etc.)
+    - Blocks javascript:, data:text/html, vbscript:, expression(), @import URI schemes
+    - Removes CDATA sections, <embed>, <object>, <base> tags
+    - Cleans up leftover empty attributes after stripping
+  - `sanitizeString(input, maxLength)` — Business profile field sanitizer:
+    - Null byte removal, control character stripping (keeps \t \n \r)
+    - Whitespace trimming and collapsing
+    - Max length enforcement
+  - `generateNonce()` — 128-bit crypto-secure CSP nonce (base64url)
+  - `getSecurityHeaders()` — Standard security headers:
+    - X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, CSP
+  - `applySecurityHeaders(response)` — Convenience wrapper for NextResponse
+  - `isValidId(id)` — ID format validator (alphanumeric, hyphens, underscores)
+  - `sanitizeEmail(email)` — Lowercase, trim, max 254 chars
+  - `sanitizePhone(phone)` — Digits, +, -, spaces, parentheses only
+
+- Verified: 0 lint errors, dev server compiles cleanly, all new files created successfully
+
+Stage Summary:
+- New Prisma model: SemanticMemory (with unique constraint + 3 indexes)
+- New API: GET /api/pipeline — List executions with filters, stats, pagination
+- New API: GET /api/bi — Full BI reports with health scores, insights, recommendations
+- New lib: semantic-memory.ts — 9 functions for persistent memory operations
+- New lib: business-intelligence.ts — Deterministic BI engine with 7 health dimensions, 5 insight generators
+- New lib: security.ts — HTML sanitizer, string sanitizer, CSP nonce, security headers
+- All files pass lint with 0 errors

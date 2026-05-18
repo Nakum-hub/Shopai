@@ -53,6 +53,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
+import { SandboxedPreview } from '@/components/preview/sandboxed-preview';
 import type { StorefrontSection } from '@/lib/types';
 
 // =============================================================================
@@ -1125,7 +1126,7 @@ export function PreviewView() {
                 </div>
               )}
 
-              {/* iframe */}
+              {/* Sandboxed iframe */}
               <div
                 className={cn(
                   'bg-white rounded-xl overflow-hidden shadow-2xl shadow-black/20',
@@ -1152,14 +1153,12 @@ export function PreviewView() {
                   )}
                 </AnimatePresence>
 
-                <iframe
-                  srcDoc={displayHtml}
+                <SandboxedPreview
+                  html={displayHtml}
                   title="Storefront Preview"
-                  className="w-full border-0"
-                  style={{
-                    height: previewDevice === 'mobile' ? '667px' : previewDevice === 'tablet' ? '1024px' : 'calc(100vh - 180px)',
-                  }}
-                  sandbox="allow-scripts"
+                  businessName={currentStorefront.businessName}
+                  height={previewDevice === 'mobile' ? '667px' : previewDevice === 'tablet' ? '1024px' : 'calc(100vh - 180px)'}
+                  className="w-full"
                 />
               </div>
             </motion.div>

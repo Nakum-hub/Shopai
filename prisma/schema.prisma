@@ -194,3 +194,25 @@ model Template {
   @@index([popular])
   @@index([downloadCount])
 }
+
+// =============================================================================
+// Semantic Memory (persistent business/user memory)
+// =============================================================================
+
+model SemanticMemory {
+  id          String   @id @default(cuid())
+  sessionId   String
+  category    String   // 'business_profile' | 'user_preference' | 'generation_insight' | 'conversation_fact'
+  key         String   // e.g., "business_name", "preferred_color", "generation_tip"
+  value       String   // the actual stored value
+  confidence  Float    @default(1.0) // 0.0 to 1.0
+  source      String   // 'voice' | 'chat' | 'generation' | 'system'
+  expiresAt   DateTime? // optional TTL
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([sessionId, key])
+  @@index([sessionId])
+  @@index([category])
+  @@index([key])
+}
