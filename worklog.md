@@ -408,6 +408,91 @@ Work Log:
 Stage Summary:
 - Critical trust issue fixed: generated storefronts now persist to SQLite database
 - Settings survive page refreshes via localStorage
+
+---
+Task ID: 7
+Agent: Main Orchestrator
+Task: Military-grade rebuild based on technical audit findings
+
+Work Log:
+- Rebuilt database schema with PipelineExecution, PipelineLog, ConversationSession, ChatHistory tables
+- Added proper indexes on all frequently queried fields (status, category, dates, sessionId)
+- Added unique constraint on (storefrontId, date) for analytics
+- Created Zod validation library (src/lib/validation.ts) with schemas for all API inputs
+- Implemented token-bucket rate limiter (src/lib/rate-limit.ts) with per-client limits
+- Built real HTML validation engine (src/lib/html-validator.ts) with 15 structural/SEO/responsive/a11y checks
+- Built HTML auto-repair system that fixes DOCTYPE, viewport, charset, lang, unclosed img tags
+- Rebuilt chat API with persistent DB-backed conversation memory (ConversationSession + ChatHistory)
+- Rebuilt generate/website API with real HTML validation, auto-repair, and SEO injection
+- Rebuilt storefronts API with Zod validation, pagination support
+- Rebuilt analytics API with real DB data, business intelligence metrics, generation quality tracking
+- Rebuilt voice/process API with validation and rate limiting
+- Rebuilt extract-profile API with validation and rate limiting
+- Rebuilt generation WebSocket service as real orchestration engine (9 LLM-powered stages)
+- Orchestration service tracks execution in PipelineExecution + PipelineLog tables
+- Real retry logic with exponential backoff (1s, 3s) and 30s/60s timeouts
+- Removed mock business profile fallbacks from builder (requires real API extraction)
+- Removed parallel API call from builder — orchestration service handles full pipeline
+- Added generation_html WebSocket event for real-time HTML delivery
+- Added business profile validation before generation (blocks if no profile exists)
+- 0 lint errors across entire codebase
+
+Stage Summary:
+- Database: 4 new tables (PipelineExecution, PipelineLog, ConversationSession, ChatHistory), 15+ indexes
+- Security: Zod validation on all 6 API endpoints, rate limiting (30/30 chat, 5/60 generate, 10/60 voice, 60/60 analytics)
+- Orchestration: Real LLM-powered 9-stage pipeline with DB tracking, retry logic, timeouts
+- Validation: 15-check HTML validation engine with auto-repair
+- Memory: Persistent conversation history (no more lost sessions on server restart)
+- Analytics: Real DB data with business intelligence (generation metrics, quality scores)
+- Frontend: Hardwired to real backend, mock fallbacks removed, proper error handling
 - Professional footer added with proper sticky behavior
 - All API endpoints verified working end-to-end
 - Generation service running on port 3002
+
+---
+Task ID: 2
+Agent: Orchestration Engine Builder
+Task: Rebuild generation service as real orchestration runtime
+
+Work Log:
+- Read existing worklog (tasks 0, 2-b through 5-b) and analyzed the fake generation service architecture
+- Read Prisma schema to understand PipelineExecution and PipelineLog models
+- Read existing html-validator.ts (validateHtml, repairHtml) and /api/generate/website route for LLM patterns
+- Studied z-ai-web-dev-sdk usage pattern from chat, voice, extract-profile, and website generation routes
+- Completely rewrote `mini-services/generation-service/index.ts` (650+ lines) from scratch as a real orchestration engine:
+  - **Real LLM calls** for each of 9 pipeline stages using `z-ai-web-dev-sdk` with `ZAI.create()` + `zai.chat.completions.create()`
+  - **PipelineContext** accumulates artifacts across stages: voiceAnalysis → businessUnderstanding → structurePlan → brandingSpec → contentCopy → sectionsHtml → finalHtml
+  - **Stage 1 (processing_voice)**: LLM analyzes voice transcript if present, skips otherwise
+  - **Stage 2 (understanding_business)**: LLM analyzes business profile, identifies gaps, target audience, value proposition
+  - **Stage 3 (planning_structure)**: LLM plans optimal page sections, layout, navigation, CTA placement
+  - **Stage 4 (generating_branding)**: LLM creates color palette (hex codes), typography, visual language spec
+  - **Stage 5 (generating_content)**: LLM writes hero copy, product descriptions, testimonials, CTAs
+  - **Stage 6 (generating_sections)**: LLM generates responsive HTML section snippets
+  - **Stage 7 (assembling_pages)**: Main generation — LLM produces complete standalone HTML with all prior context (60s timeout)
+  - **Stage 8 (validating)**: Real HTML validation — 15 checks (DOCTYPE, html/head/body, viewport, charset, meta description, H1/H2 headings, responsive CSS, flexbox/grid, image alt, lang attr, content depth)
+  - **Stage 9 (repair loop)**: Automated structural repairs + LLM-powered repair with re-validation (max 2 attempts)
+  - **LLM callLlm() helper**: timeout via Promise.race (30s default, 60s for main generation), exponential backoff retry (1s, 3s), token tracking
+  - **Database persistence**: PipelineExecution record created at start, updated at each stage, finalized with status/duration/outputHtml/validationScore/errorMessage
+  - **PipelineLog records**: Each stage persisted with executionId, stage, level, agent, message, detail, inputTokens, outputTokens, durationMs
+  - **Markdown cleanup**: cleanHtmlOutput() strips ```html and ``` code fences from LLM output
+  - **Inline HTML validation engine**: Same logic as main project's html-validator.ts (validateHtmlContent + repairHtmlIssues)
+  - **New event `generation_html`**: Emits `{ storefrontId, html }` when generation completes
+  - **Backward compatibility**: Same `session_assigned`, `generation_progress`, `generation_complete` events
+  - **generation_complete payload extended**: Now includes `html`, `validationScore`, `generationTimeMs`
+- Installed `z-ai-web-dev-sdk` as dependency in generation-service/package.json
+- Updated dev script from `bun --hot` to `bun run --hot` for proper Socket.IO binding
+- Verified service starts correctly on port 3002 with Socket.IO handshake working
+- Verified database connectivity: PipelineExecution and PipelineLog tables accessible
+- Started service in background, confirmed listening on port 3002
+
+Stage Summary:
+- File rewritten: `mini-services/generation-service/index.ts` (650+ lines, production-quality)
+- Version bumped to 2.0.0
+- New dependency: `z-ai-web-dev-sdk`
+- All 9 pipeline stages make real LLM calls with token tracking and timing
+- Real HTML validation with 15 checks, pass threshold ≥ 70
+- Real repair loop: automated structural fixes + LLM repair (max 2 attempts)
+- Full DB persistence: PipelineExecution + PipelineLog records per execution
+- New Socket.IO event: `generation_html` emits final HTML on completion
+- Backward compatible: same events (`session_assigned`, `generation_progress`, `generation_complete`)
+- Service running on port 3002, verified with Socket.IO handshake test

@@ -1,52 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
+import { validateInput, generateWebsiteSchema } from '@/lib/validation';
+import { rateLimit } from '@/lib/rate-limit';
+import { validateHtml, repairHtml } from '@/lib/html-validator';
 
 export async function POST(request: NextRequest) {
-  try {
-    const { businessProfile, prompt } = await request.json();
+  const startTime = Date.now();
 
-    if (!businessProfile && !prompt) {
+  try {
+    // Rate limiting — website generation is expensive
+    const clientIp = request.headers.get('x-forwarded-for') || 'unknown';
+    const rl = rateLimit(`generate:${clientIp}`, 5, 60_000);
+    if (!rl.allowed) {
       return NextResponse.json(
-        { error: 'Business profile or prompt is required' },
-        { status: 400 }
+        { error: 'Too many generation requests. Please wait a moment.', retryAfterMs: rl.retryAfterMs },
+        { status: 429 }
       );
     }
 
+    const body = await request.json();
+    const validation = validateInput(generateWebsiteSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const { businessProfile, prompt } = validation.data;
     const zai = await ZAI.create();
 
     const profileStr = businessProfile
       ? JSON.stringify(businessProfile, null, 2)
-      : prompt;
+      : prompt!;
 
-    // Step 1: Generate complete storefront HTML using LLM
+    // --- Stage 1: Generate complete storefront HTML ---
     const htmlGeneration = await zai.chat.completions.create({
       messages: [
         {
           role: 'assistant',
-          content: `You are an expert web developer who creates beautiful, modern, mobile-responsive storefront websites for small businesses. 
-          
+          content: `You are an expert web developer who creates beautiful, modern, mobile-responsive storefront websites for small businesses.
+
 You generate COMPLETE, standalone HTML pages with:
 - Inline CSS (no external dependencies)
 - Modern CSS with CSS Grid and Flexbox
-- Mobile-first responsive design
+- Mobile-first responsive design using @media queries
 - Smooth scroll behavior
 - Beautiful gradients and shadows
-- Professional typography using system fonts
+- Professional typography using system fonts (system-ui, -apple-system, sans-serif)
 - SVG icons (no external icon libraries)
-- Proper meta viewport tags
+- Proper meta viewport, charset, and lang attributes
+- A single <h1> tag for the main heading
+- Proper heading hierarchy (h1, h2, h3)
+- Alt text on all <img> tags (use placeholder images via https://placehold.co/400x300/eee/999?text=Image)
 - All sections are real, content-rich, and professionally designed
 
-The HTML must include these sections based on the business:
-1. Hero section with business name, tagline, and CTA
+The HTML MUST include these sections based on the business:
+1. Hero section with business name, tagline, and CTA button
 2. About section with business description
-3. Products/Services grid with cards
-4. Testimonials section
-5. Business hours and contact info
-6. Footer with copyright
+3. Products/Services grid with styled cards
+4. Testimonials section with 3 customer quotes
+5. Business hours and contact information
+6. Footer with copyright and links
 
 Use the business's color scheme from their style preferences.
 Make it look stunning and production-ready.
-Return ONLY the complete HTML. No markdown, no explanation, no code blocks.`
+Return ONLY the complete HTML. No markdown, no explanation, no code blocks. Start with <!DOCTYPE html>.`,
         },
         {
           role: 'user',
@@ -60,11 +76,23 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks.`
 
     // Clean any markdown code blocks
     generatedHtml = generatedHtml
-      .replace(/```html\n?/g, '')
-      .replace(/```\n?/g, '')
+      .replace(/^```html\n?/i, '')
+      .replace(/\n?```\s*$/g, '')
       .trim();
 
-    // Step 2: Generate SEO metadata
+    // --- Stage 2: Validate HTML ---
+    let validation = validateHtml(generatedHtml);
+
+    // --- Stage 3: Auto-repair if needed ---
+    let repairs: string[] = [];
+    if (!validation.passed) {
+      const repairResult = repairHtml(generatedHtml);
+      generatedHtml = repairResult.html;
+      repairs = repairResult.repairs;
+      validation = validateHtml(generatedHtml);
+    }
+
+    // --- Stage 4: Generate SEO metadata ---
     const seoGeneration = await zai.chat.completions.create({
       messages: [
         {
@@ -75,8 +103,8 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks.`
           - keywords: array of strings
           - ogTitle: string
           - ogDescription: string
-          
-          Only return valid JSON.`
+
+          Only return valid JSON. No markdown.`,
         },
         {
           role: 'user',
@@ -86,7 +114,7 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks.`
       thinking: { type: 'disabled' },
     });
 
-    let seoData = {};
+    let seoData: Record<string, unknown> = {};
     try {
       const seoRaw = seoGeneration.choices[0]?.message?.content || '{}';
       const seoCleaned = seoRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -95,32 +123,33 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks.`
       seoData = { title: 'Business Storefront', description: 'Welcome to our business' };
     }
 
-    // Step 3: Inject SEO into HTML
+    // Inject SEO into HTML
     if (generatedHtml.includes('<head>')) {
       const metaTags = `
-    <title>${seoData.title || 'Business Storefront'}</title>
-    <meta name="description" content="${seoData.description || ''}" />
-    <meta name="keywords" content="${(seoData.keywords || []).join(', ')}" />
-    <meta property="og:title" content="${seoData.ogTitle || seoData.title || ''}" />
-    <meta property="og:description" content="${seoData.ogDescription || seoData.description || ''}" />`;
+    <title>${(seoData.title as string) || 'Business Storefront'}</title>
+    <meta name="description" content="${(seoData.description as string) || ''}" />
+    <meta name="keywords" content="${((seoData.keywords as string[]) || []).join(', ')}" />
+    <meta property="og:title" content="${(seoData.ogTitle as string) || (seoData.title as string) || ''}" />
+    <meta property="og:description" content="${(seoData.ogDescription as string) || (seoData.description as string) || ''}" />`;
       generatedHtml = generatedHtml.replace('<head>', `<head>${metaTags}`);
     }
 
-    // Step 4: Validate HTML (basic check)
-    const hasDoctype = generatedHtml.toLowerCase().includes('<!doctype html>');
-    const hasHtml = generatedHtml.toLowerCase().includes('<html');
-    const hasBody = generatedHtml.toLowerCase().includes('<body');
-    const validationPassed = hasDoctype && hasHtml && hasBody;
+    const generationTimeMs = Date.now() - startTime;
 
     return NextResponse.json({
       success: true,
       html: generatedHtml,
       seo: seoData,
       validation: {
-        passed: validationPassed,
-        checks: { hasDoctype, hasHtml, hasBody },
+        score: validation.score,
+        passed: validation.passed,
+        checks: validation.checks,
+        issues: validation.issues,
+        summary: validation.summary,
       },
-      generationTime: `${Math.random() * 5 + 3}s`,
+      repairs: repairs.length > 0 ? repairs : undefined,
+      generationTime: `${(generationTimeMs / 1000).toFixed(1)}s`,
+      htmlSize: `${(Buffer.byteLength(generatedHtml) / 1024).toFixed(1)}KB`,
     });
   } catch (error) {
     console.error('[GENERATE_WEBSITE]', error);

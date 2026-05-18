@@ -1,12 +1,13 @@
 {
   "name": "@storecraft/generation-service",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "bun --hot index.ts"
+    "dev": "bun run --hot index.ts"
   },
   "dependencies": {
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "z-ai-web-dev-sdk": "latest"
   },
   "devDependencies": {
     "@types/bun": "latest"

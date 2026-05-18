@@ -386,7 +386,6 @@ function VoiceInputSection() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const simTimerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const apiResultRef = useRef<string | null>(null);
   const generationCompletedRef = useRef(false);
   const { toast: showToast } = useToast();
   const sessionIdRef = useRef<string>(`builder-${Date.now()}`);
@@ -681,14 +680,30 @@ function VoiceInputSection() {
         timestamp: Date.now(),
       });
 
-      // Only set MOCK_BUSINESS_PROFILE as fallback if no profile is set yet
-      // (voice flow already sets profile via processVoiceAudio)
-      if (!useAppStore.getState().businessProfile) {
+      // Try to extract business profile from conversation after enough messages
+      // Only attempt if no profile has been set yet (voice flow sets it directly)
+      if (!useAppStore.getState().businessProfile && result.messageCount >= 2) {
         simTimerRef.current.push(
-          setTimeout(() => {
-            setBusinessProfile(MOCK_BUSINESS_PROFILE);
-            setSimStage('ready');
-          }, 800)
+          setTimeout(async () => {
+            try {
+              const allMessages = useAppStore.getState().chatMessages;
+              const profileRes = await fetch('/api/extract-profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: allMessages }),
+              });
+              const profileData = await profileRes.json();
+              if (profileData.success && profileData.businessProfile) {
+                setBusinessProfile(profileData.businessProfile);
+                setSimStage('ready');
+              } else {
+                throw new Error(profileData.error || 'Extraction failed');
+              }
+            } catch (err) {
+              console.error('[ExtractProfile] Failed:', err);
+              // Don't set mock profile — let user continue chatting
+            }
+          }, 1200)
         );
       }
 
@@ -785,12 +800,20 @@ function VoiceInputSection() {
   );
 
   const handleGenerateWebsite = useCallback(() => {
-    const profileToUse = businessProfile || MOCK_BUSINESS_PROFILE;
+    if (!businessProfile) {
+      showToast({
+        title: 'Business Profile Required',
+        description: 'Please describe your business first so we can generate a tailored website.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const profileToUse = businessProfile;
     const storefrontId = `sf-${Date.now()}`;
     const jobId = `job-${Date.now()}`;
 
     // Reset refs for this generation
-    apiResultRef.current = null;
     generationCompletedRef.current = false;
 
     // Create the generation job in the store
@@ -801,7 +824,7 @@ function VoiceInputSection() {
       currentStep: 0,
       totalSteps: PIPELINE_STEPS.length,
       progress: 0,
-      message: 'Starting generation...',
+      message: 'Starting generation pipeline...',
       startedAt: new Date().toISOString(),
       completedAt: null,
       voiceTranscript: voiceTranscript,
@@ -811,18 +834,18 @@ function VoiceInputSection() {
     setCurrentJob(newJob);
     setSimStage('generating');
 
-    // --- Connect to WebSocket for real-time progress ---
+    // --- Connect to WebSocket for real-time orchestration ---
+    // The generation service now runs the FULL pipeline including LLM-powered HTML generation
     const socket = io('/?XTransformPort=3002', {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
+      timeout: 120000,
     });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('[Builder] WebSocket connected:', socket.id);
-
-      // Emit start_generation to the WebSocket service
+      console.log('[Builder] WebSocket connected to orchestration service:', socket.id);
       socket.emit('start_generation', {
         storefrontId,
         businessProfile: profileToUse,
@@ -837,10 +860,8 @@ function VoiceInputSection() {
       agent: string;
       logs: GenerationLog[];
     }) => {
-      // Update status and progress in the store
       updateGenerationStatus(data.status, data.message, data.progress);
 
-      // Add any new logs from the event
       if (data.logs && data.logs.length > 0) {
         const currentLogIds = new Set(
           useAppStore.getState().currentJob?.logs.map(l => l.id) || []
@@ -858,26 +879,41 @@ function VoiceInputSection() {
       }
     });
 
+    // The orchestration service sends the final HTML via this event
+    socket.on('generation_html', (data: {
+      storefrontId: string;
+      html: string;
+      validationScore: number;
+      generationTimeMs: number;
+    }) => {
+      console.log(`[Builder] HTML received from orchestration: ${(data.html.length / 1024).toFixed(1)}KB, validation: ${data.validationScore}/100, time: ${(data.generationTimeMs / 1000).toFixed(1)}s`);
+      if (!generationCompletedRef.current) {
+        finalizeGeneration(data.html, storefrontId, profileToUse);
+      }
+    });
+
     socket.on('generation_complete', (data: {
       storefrontId: string;
       success: boolean;
+      html?: string;
+      validationScore?: number;
+      generationTimeMs?: number;
     }) => {
       if (data.success) {
-        // If the API already returned HTML, finalize now
-        if (apiResultRef.current && !generationCompletedRef.current) {
-          finalizeGeneration(apiResultRef.current, storefrontId, profileToUse);
+        // If HTML was bundled in the complete event (fallback), finalize with it
+        if (data.html && !generationCompletedRef.current) {
+          finalizeGeneration(data.html, storefrontId, profileToUse);
         }
       } else {
         updateGenerationStatus('error', 'Generation failed on the server', 0);
-        setSimStage('complete');
+        setSimStage('ready');
         showToast({
           title: 'Generation Failed',
-          description: 'The server reported an error during generation.',
+          description: 'The server reported an error during generation. Please try again.',
           variant: 'destructive',
         });
       }
 
-      // Disconnect WebSocket after completion
       if (socketRef.current?.connected) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -886,76 +922,14 @@ function VoiceInputSection() {
 
     socket.on('connect_error', (err) => {
       console.error('[Builder] WebSocket connection error:', err.message);
-      // Don't block — the API call will still proceed
+      showToast({
+        title: 'Connection Error',
+        description: 'Could not connect to the generation service. Please try again.',
+        variant: 'destructive',
+      });
+      updateGenerationStatus('error', 'Connection failed', 0);
+      setSimStage('ready');
     });
-
-    // --- In parallel, call the API to generate HTML ---
-    (async () => {
-      try {
-        const res = await fetch('/api/generate/website', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ businessProfile: profileToUse }),
-        });
-
-        if (!res.ok) {
-          throw new Error(`API returned ${res.status}`);
-        }
-
-        const data = await res.json();
-
-        if (data.success && data.html) {
-          apiResultRef.current = data.html;
-
-          // If WebSocket already completed, finalize now
-          if (generationCompletedRef.current) {
-            // Already completed via WebSocket, update the HTML
-            const currentStorefront = useAppStore.getState().currentStorefront;
-            if (currentStorefront) {
-              // Update the existing storefront with the real HTML in Zustand
-              useAppStore.getState().updateStorefront(currentStorefront.id, {
-                html: data.html,
-                updatedAt: new Date().toISOString(),
-              });
-
-              // Also sync the generated HTML to the database (non-blocking)
-              fetch('/api/storefronts', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id: currentStorefront.id, html: data.html }),
-              }).catch((dbErr) =>
-                console.error('[Builder] Failed to sync HTML to DB (non-fatal):', dbErr)
-              );
-            }
-          } else if (
-            useAppStore.getState().currentJob?.status === 'complete' ||
-            useAppStore.getState().currentJob?.status === 'idle'
-          ) {
-            // Pipeline already done, finalize immediately
-            finalizeGeneration(data.html, storefrontId, profileToUse);
-          }
-          // Otherwise wait for WebSocket generation_complete event
-        } else {
-          throw new Error('API returned unsuccessful response');
-        }
-      } catch (error) {
-        console.error('[Builder] API generation error:', error);
-        if (!generationCompletedRef.current) {
-          updateGenerationStatus('error', 'Failed to generate website HTML', 0);
-          setSimStage('complete');
-          showToast({
-            title: 'Generation Error',
-            description: error instanceof Error ? error.message : 'Failed to generate the website.',
-            variant: 'destructive',
-          });
-        }
-        // Disconnect WebSocket on error
-        if (socketRef.current?.connected) {
-          socketRef.current.disconnect();
-          socketRef.current = null;
-        }
-      }
-    })();
   }, [voiceTranscript, businessProfile, setCurrentJob, updateGenerationStatus, addGenerationLog, finalizeGeneration, showToast]);
 
   const handleTextSubmit = async () => {
@@ -980,9 +954,8 @@ function VoiceInputSection() {
       timestamp: Date.now(),
     });
 
-    // Extract business profile after enough messages via API
+    // Extract business profile after enough messages via real API
     if (result.messageCount >= 2 && !businessProfile) {
-      // Try real extraction API, fall back to mock
       (async () => {
         try {
           const allMessages = useAppStore.getState().chatMessages;
@@ -999,9 +972,8 @@ function VoiceInputSection() {
             throw new Error(profileData.error || 'Extraction failed');
           }
         } catch (err) {
-          console.error('[ExtractProfile] Failed, using mock:', err);
-          setBusinessProfile(MOCK_BUSINESS_PROFILE);
-          setSimStage('ready');
+          console.error('[ExtractProfile] Failed:', err);
+          // Don't use mock — let user continue chatting for more context
         }
       })();
     }
@@ -1044,7 +1016,6 @@ function VoiceInputSection() {
       mediaRecorderRef.current = null;
     }
     audioChunksRef.current = [];
-    apiResultRef.current = null;
     generationCompletedRef.current = false;
     clearChat();
     setBusinessProfile(null);

@@ -1,46 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
+import { validateInput, voiceProcessSchema } from '@/lib/validation';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
   try {
-    const { audio } = await request.json();
-
-    if (!audio) {
+    // Rate limiting — ASR is expensive
+    const clientIp = request.headers.get('x-forwarded-for') || 'unknown';
+    const rl = rateLimit(`voice:${clientIp}`, 10, 60_000);
+    if (!rl.allowed) {
       return NextResponse.json(
-        { error: 'Audio data is required' },
-        { status: 400 }
+        { error: 'Too many voice processing requests. Please wait.', retryAfterMs: rl.retryAfterMs },
+        { status: 429 }
       );
     }
 
+    const body = await request.json();
+    const validation = validateInput(voiceProcessSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const { audio } = validation.data;
     const zai = await ZAI.create();
 
-    // Process audio with ASR
+    // --- Stage 1: ASR (Speech-to-Text) ---
     const response = await zai.audio.asr.create({
       file_base64: audio,
     });
 
     const transcript = response.text || '';
 
-    // Use LLM to extract business understanding from the transcript
+    if (!transcript || transcript.trim().length < 5) {
+      return NextResponse.json({
+        success: false,
+        error: 'Could not detect speech in the audio. Please try again with a clearer recording.',
+        transcript: '',
+      });
+    }
+
+    // --- Stage 2: Business Profile Extraction via LLM ---
     const businessAnalysis = await zai.chat.completions.create({
       messages: [
         {
           role: 'assistant',
-          content: `You are a business analyst AI. Extract structured business information from voice transcripts. 
-          Return a JSON object with these fields:
-          - businessName: string
-          - category: one of [bakery, restaurant, clothing, electronics, salon, grocery, hardware, medical, boutique, service, other]
-          - description: string (2-3 sentence business description)
-          - location: string
-          - phone: string or null
-          - email: string or null  
-          - hours: string or null
-          - products: array of {name, description, price, category}
-          - services: array of {name, description, duration, price}
-          - style: {primaryColor, secondaryColor, theme (modern/classic/minimal/bold/elegant), mood}
-          - features: array of feature strings (e.g., ["online-ordering", "delivery", "whatsapp"])
-          
-          Only return valid JSON. No markdown, no explanation. If a field cannot be determined, use null or empty array.`
+          content: `You are a business analyst AI. Extract structured business information from voice transcripts.
+Return a JSON object with these fields:
+- businessName: string
+- category: one of [bakery, restaurant, clothing, electronics, salon, grocery, hardware, medical, boutique, service, other]
+- description: string (2-3 sentence business description)
+- location: string or null
+- phone: string or null
+- email: string or null
+- hours: string or null
+- products: array of {name, description, price, category} — infer reasonable products from the business type
+- services: array of {name, description, duration, price}
+- style: {primaryColor (hex), secondaryColor (hex), theme (modern/classic/minimal/bold/elegant), mood}
+- features: array of feature strings (e.g., "online-ordering", "delivery", "whatsapp")
+
+Only return valid JSON. No markdown, no explanation.`,
         },
         {
           role: 'user',
@@ -50,7 +68,7 @@ export async function POST(request: NextRequest) {
       thinking: { type: 'disabled' },
     });
 
-    let businessProfile;
+    let businessProfile: Record<string, unknown>;
     try {
       const rawContent = businessAnalysis.choices[0]?.message?.content || '{}';
       const cleaned = rawContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -75,6 +93,7 @@ export async function POST(request: NextRequest) {
       success: true,
       transcript,
       confidence: 0.95,
+      wordCount: transcript.split(/\s+/).length,
       businessProfile,
     });
   } catch (error) {

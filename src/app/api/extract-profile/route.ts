@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
+import { validateInput, extractProfileSchema } from '@/lib/validation';
+import { rateLimit } from '@/lib/rate-limit';
+import { db } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
-    const { messages } = await request.json();
-
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Messages array is required' },
-        { status: 400 }
-      );
+    const clientIp = request.headers.get('x-forwarded-for') || 'unknown';
+    const rl = rateLimit(`extract:${clientIp}`, 15, 60_000);
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
     }
 
+    const body = await request.json();
+    const validation = validateInput(extractProfileSchema, body);
+    if (!validation.success) {
+      return NextResponse.json({ error: validation.error }, { status: 400 });
+    }
+
+    const { messages } = validation.data;
     const zai = await ZAI.create();
 
-    // Build a conversation summary from messages for the LLM
+    // Build conversation summary
     const conversationText = messages
       .map((m: { role: string; content: string }) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n\n');
@@ -54,7 +61,7 @@ IMPORTANT RULES:
       thinking: { type: 'disabled' },
     });
 
-    let businessProfile;
+    let businessProfile: Record<string, unknown>;
     try {
       const rawContent = response.choices[0]?.message?.content || '{}';
       const cleaned = rawContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -63,43 +70,43 @@ IMPORTANT RULES:
       businessProfile = null;
     }
 
-    if (!businessProfile || !businessProfile.name) {
+    if (!businessProfile || !(businessProfile.name as string)) {
       return NextResponse.json({
         success: false,
         error: 'Could not extract a complete business profile from the conversation. Please provide more details about your business.',
       });
     }
 
-    // Validate and set defaults for required fields
+    // Validate and set defaults
     const validCategories = ['bakery', 'restaurant', 'clothing', 'electronics', 'salon', 'grocery', 'hardware', 'medical', 'boutique', 'service', 'other'];
     const validThemes = ['modern', 'classic', 'minimal', 'bold', 'elegant'];
 
     const profile = {
-      name: businessProfile.name || 'My Business',
-      category: validCategories.includes(businessProfile.category) ? businessProfile.category : 'other',
-      description: businessProfile.description || '',
-      location: businessProfile.location || '',
-      phone: businessProfile.phone || '',
-      email: businessProfile.email || '',
-      hours: businessProfile.hours || '',
-      products: Array.isArray(businessProfile.products) ? businessProfile.products.map((p: Record<string, string>) => ({
+      name: (businessProfile.name as string) || 'My Business',
+      category: validCategories.includes(businessProfile.category as string) ? businessProfile.category : 'other',
+      description: (businessProfile.description as string) || '',
+      location: (businessProfile.location as string) || '',
+      phone: (businessProfile.phone as string) || '',
+      email: (businessProfile.email as string) || '',
+      hours: (businessProfile.hours as string) || '',
+      products: Array.isArray(businessProfile.products) ? (businessProfile.products as Array<Record<string, string>>).map((p) => ({
         name: p.name || '',
         description: p.description || '',
         price: p.price || '',
         category: p.category || '',
       })) : [],
-      services: Array.isArray(businessProfile.services) ? businessProfile.services.map((s: Record<string, string>) => ({
+      services: Array.isArray(businessProfile.services) ? (businessProfile.services as Array<Record<string, string>>).map((s) => ({
         name: s.name || '',
         description: s.description || '',
         duration: s.duration,
         price: s.price,
       })) : [],
       style: {
-        primaryColor: businessProfile.style?.primaryColor || '#7c3aed',
-        secondaryColor: businessProfile.style?.secondaryColor || '#06b6d4',
-        fontFamily: businessProfile.style?.fontFamily || 'Inter',
-        theme: validThemes.includes(businessProfile.style?.theme) ? businessProfile.style.theme : 'modern',
-        mood: businessProfile.style?.mood || 'professional',
+        primaryColor: (businessProfile.style as Record<string, string>)?.primaryColor || '#7c3aed',
+        secondaryColor: (businessProfile.style as Record<string, string>)?.secondaryColor || '#06b6d4',
+        fontFamily: (businessProfile.style as Record<string, string>)?.fontFamily || 'Inter',
+        theme: validThemes.includes((businessProfile.style as Record<string, string>)?.theme as string) ? (businessProfile.style as Record<string, string>)?.theme : 'modern',
+        mood: (businessProfile.style as Record<string, string>)?.mood || 'professional',
       },
       features: Array.isArray(businessProfile.features) ? businessProfile.features : [],
     };

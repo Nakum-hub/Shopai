@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =============================================================================
+// Storefront (Generated Website)
+// =============================================================================
+
 model Storefront {
   id              String   @id @default(cuid())
   name            String
@@ -15,7 +19,7 @@ model Storefront {
   status          String   @default("draft") // draft, generating, ready, published, error
   description     String?
   url             String?
-  html            String?  // generated HTML
+  html            String?
   businessProfile String?  // JSON business profile
   deploymentStatus String  @default("none")
   deploymentUrl   String?
@@ -25,13 +29,23 @@ model Storefront {
 
   analytics       StorefrontAnalytics[]
   generationJobs  GenerationJob[]
+  pipelineExecutions PipelineExecution[]
+
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+  @@index([updatedAt])
 }
+
+// =============================================================================
+// Storefront Analytics (daily aggregates)
+// =============================================================================
 
 model StorefrontAnalytics {
   id              String   @id @default(cuid())
   storefrontId    String
   totalViews      Int      @default(0)
-  uniqueVisitors Int      @default(0)
+  uniqueVisitors  Int      @default(0)
   avgDuration     Int      @default(0) // seconds
   bounceRate      Float    @default(0)
   seoScore        Int      @default(0)
@@ -41,7 +55,15 @@ model StorefrontAnalytics {
   createdAt       DateTime @default(now())
 
   storefront      Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+
+  @@unique([storefrontId, date])
+  @@index([storefrontId])
+  @@index([date])
 }
+
+// =============================================================================
+// Generation Job (legacy, kept for backward compatibility)
+// =============================================================================
 
 model GenerationJob {
   id              String   @id @default(cuid())
@@ -55,14 +77,111 @@ model GenerationJob {
   completedAt     DateTime?
 
   storefront      Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+
+  @@index([storefrontId])
+  @@index([status])
 }
+
+// =============================================================================
+// Pipeline Execution (real orchestration tracking)
+// =============================================================================
+
+model PipelineExecution {
+  id              String   @id @default(cuid())
+  storefrontId    String?
+  sessionId       String
+  status          String   @default("pending") // pending, running, completed, failed, cancelled
+  currentStage    String
+  totalStages     Int      @default(9)
+  progress        Int      @default(0)
+  inputSnapshot   String?  // JSON: the business profile / prompt that triggered this run
+  outputHtml      String?  // final generated HTML
+  validationScore Int?
+  errorMessage    String?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  durationMs      Int?     // completion time in milliseconds
+
+  logs            PipelineLog[]
+
+  storefront      Storefront? @relation(fields: [storefrontId], references: [id], onDelete: SetNull)
+
+  @@index([sessionId])
+  @@index([storefrontId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// =============================================================================
+// Pipeline Log (stage-by-stage execution log)
+// =============================================================================
+
+model PipelineLog {
+  id              String   @id @default(cuid())
+  executionId     String
+  stage           String   // processing_voice, understanding_business, etc.
+  level           String   @default("info") // info, success, warning, error
+  agent           String
+  message         String
+  detail          String?
+  inputTokens     Int?
+  outputTokens    Int?
+  durationMs      Int?
+  timestamp       DateTime @default(now())
+
+  execution       PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([stage])
+}
+
+// =============================================================================
+// Conversation Session (persistent chat memory)
+// =============================================================================
+
+model ConversationSession {
+  id              String   @id @default(cuid())
+  sessionId       String   @unique
+  storefrontId    String?
+  businessProfile String?  // JSON: extracted business profile
+  messageCount    Int      @default(0)
+  lastMessageAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  messages        ChatHistory[]
+
+  @@index([sessionId])
+  @@index([storefrontId])
+}
+
+// =============================================================================
+// Chat History (persistent messages)
+// =============================================================================
+
+model ChatHistory {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         ConversationSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  role            String   // user, assistant, system
+  content         String
+  metadata        String?  // JSON metadata
+  createdAt       DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// Template
+// =============================================================================
 
 model Template {
   id              String   @id @default(cuid())
   name            String
   description     String?
   category        String   @default("other")
-  preview         String?
+  preview         String?  // CSS gradient string
   sections        String?  // JSON sections config
   style           String?  // JSON brand style
   popular         Boolean  @default(false)
@@ -70,13 +189,8 @@ model Template {
   downloadCount   Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
-}
 
-model ChatHistory {
-  id              String   @id @default(cuid())
-  sessionId       String
-  role            String   // user, assistant, system
-  content         String
-  metadata        String?  // JSON metadata
-  createdAt       DateTime @default(now())
+  @@index([category])
+  @@index([popular])
+  @@index([downloadCount])
 }
