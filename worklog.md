@@ -243,3 +243,66 @@ Stage Summary:
 - Templates view fetches real data from API
 - Mock data as fallback when DB is empty
 - Graceful loading/error handling
+
+---
+Task ID: 4-a
+Agent: Voice Recording & ASR Integration
+Task: Add real microphone recording with ASR and business profile extraction
+
+Work Log:
+- Created `/home/z/my-project/src/app/api/extract-profile/route.ts` — new API endpoint
+  - Accepts `{ messages: [{role, content}] }` (chat history)
+  - Uses z-ai-web-dev-sdk LLM to extract structured BusinessProfile JSON from conversation
+  - Returns `{ success, businessProfile }`
+- Updated builder-view.tsx with real voice recording:
+  - Added `startRecording()` using `navigator.mediaDevices.getUserMedia({ audio: true })`
+  - Uses `MediaRecorder` API with 100ms chunk intervals
+  - Auto-stops after 30 seconds
+  - `stopRecording()` properly cleans up MediaRecorder and streams
+  - `processVoiceAudio()` converts blob to base64 and calls `POST /api/voice/process`
+  - Real ASR transcription via z-ai-web-dev-sdk
+  - Extracted businessProfile from voice API used directly (no more MOCK_BUSINESS_PROFILE)
+- Updated builder-view.tsx with real profile extraction from chat:
+  - After messageCount >= 2, calls `POST /api/extract-profile` with chat history
+  - Uses returned BusinessProfile instead of mock
+  - Falls back to MOCK_BUSINESS_PROFILE only on API failure
+- Graceful degradation: mic denied → mock transcription, API fail → mock profile
+- Added `isMicSupported` detection on mount
+- Proper cleanup: MediaRecorder + auto-stop timer on unmount/reset
+
+Stage Summary:
+- Real voice recording via Web Audio API + MediaRecorder
+- Real ASR transcription via z-ai-web-dev-sdk
+- Real business profile extraction from both voice and chat
+- MOCK_BUSINESS_PROFILE now only used as fallback
+- New API endpoint: `/api/extract-profile`
+
+---
+Task ID: 4-b
+Agent: Smart Mock Data & Analytics Wiring
+Task: Smart mock data display and real analytics wiring
+
+Work Log:
+- Updated projects-view.tsx with smart mock data:
+  - Real data ONLY when API returns storefronts (mock data hidden)
+  - Mock data with info banner when DB is empty ("Example storefronts")
+  - Mock data with error banner + retry when API fails
+  - StatsCards compute from visible data only
+- Wired analytics in DetailDialog:
+  - Fetches `GET /api/analytics?storefrontId={id}&days=30` on dialog open
+  - Loading skeletons during fetch
+  - Real totalViews, uniqueVisitors, avgSessionDuration
+  - "No analytics data yet" on empty/error
+- Wired analytics-view.tsx to real API:
+  - Replaced all local mock data generators
+  - Date range (7/30/90 days) triggers real API refetches
+  - KPI cards, traffic chart, top pages, device breakdown, scores all from API
+  - Dynamic ChangeBadge component (green/red based on positive/negative change)
+  - Loading skeleton matching existing layout
+  - Error banner with retry
+
+Stage Summary:
+- Mock data hidden when real data exists
+- Analytics fully wired to real API across projects and analytics views
+- Dynamic change indicators with proper color coding
+- Graceful loading/error states throughout

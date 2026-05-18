@@ -533,6 +533,12 @@ function StorefrontCard({
 // Detail Dialog
 // =============================================================================
 
+interface DetailAnalyticsData {
+  totalViews: number;
+  uniqueVisitors: number;
+  avgSessionDuration: string;
+}
+
 function DetailDialog({
   storefront,
   open,
@@ -543,6 +549,50 @@ function DetailDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { setCurrentView, setCurrentStorefront } = useAppStore();
+
+  // Analytics state
+  const [analyticsData, setAnalyticsData] = useState<DetailAnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState(false);
+
+  // Fetch analytics when dialog opens with a storefront
+  useEffect(() => {
+    if (!storefront || !open) {
+      setAnalyticsData(null);
+      setAnalyticsError(false);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchAnalytics = async () => {
+      setAnalyticsLoading(true);
+      setAnalyticsError(false);
+      try {
+        const res = await fetch(
+          `/api/analytics?storefrontId=${encodeURIComponent(storefront.id)}&days=30`
+        );
+        if (!res.ok) throw new Error('Failed to fetch analytics');
+        const data = await res.json();
+        if (!cancelled && data.analytics) {
+          setAnalyticsData(data.analytics);
+        }
+      } catch {
+        if (!cancelled) {
+          setAnalyticsError(true);
+          setAnalyticsData(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAnalyticsLoading(false);
+        }
+      }
+    };
+    fetchAnalytics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [storefront?.id, open]);
 
   if (!storefront) return null;
 
@@ -674,20 +724,35 @@ function DetailDialog({
                 <BarChart3 className="h-4 w-4 text-amber-400" />
                 Analytics Summary
               </h4>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg border border-border bg-card/50 p-3 text-center">
-                  <p className="text-lg font-bold">{storefront.viewCount.toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Views</p>
+              {analyticsLoading ? (
+                <div className="grid grid-cols-3 gap-3">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="rounded-lg border border-border bg-card/50 p-3 text-center space-y-2">
+                      <Skeleton className="h-6 w-16 mx-auto" />
+                      <Skeleton className="h-3 w-20 mx-auto" />
+                    </div>
+                  ))}
                 </div>
-                <div className="rounded-lg border border-border bg-card/50 p-3 text-center">
-                  <p className="text-lg font-bold">{Math.round(storefront.viewCount * 0.65).toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Visitors</p>
+              ) : analyticsError || !analyticsData ? (
+                <div className="rounded-lg border border-border bg-card/50 p-6 text-center">
+                  <p className="text-sm text-muted-foreground">No analytics data yet</p>
                 </div>
-                <div className="rounded-lg border border-border bg-card/50 p-3 text-center">
-                  <p className="text-lg font-bold">2:34</p>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Duration</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-border bg-card/50 p-3 text-center">
+                    <p className="text-lg font-bold">{analyticsData.totalViews.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total Views</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card/50 p-3 text-center">
+                    <p className="text-lg font-bold">{analyticsData.uniqueVisitors.toLocaleString()}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Visitors</p>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card/50 p-3 text-center">
+                    <p className="text-lg font-bold">{analyticsData.avgSessionDuration}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Duration</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </ScrollArea>
@@ -747,6 +812,7 @@ export function ProjectsView() {
   const [storefronts, setStorefronts] = useState<Storefront[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showingMockOnly, setShowingMockOnly] = useState(false);
 
   // UI state
   const [selectedStorefront, setSelectedStorefront] = useState<Storefront | null>(null);
@@ -769,18 +835,21 @@ export function ProjectsView() {
       const data = await res.json();
       const rawStorefronts: Storefront[] = (data.storefronts || []).map(mapApiStorefront);
 
-      // If API returns real data, merge it with mock data (mock as examples at the end)
+      // If API returns real data, show ONLY real data (no mock)
       if (rawStorefronts.length > 0) {
-        setStorefronts([...rawStorefronts, ...MOCK_STOREFRONTS]);
+        setStorefronts(rawStorefronts);
+        setShowingMockOnly(false);
       } else {
         // No real data yet — show mock data as examples
         setStorefronts([...MOCK_STOREFRONTS]);
+        setShowingMockOnly(true);
       }
     } catch (err) {
       console.error('[PROJECTS_VIEW] Failed to fetch storefronts:', err);
       setError(err instanceof Error ? err.message : 'Failed to load storefronts');
       // Fallback to mock data on error
       setStorefronts([...MOCK_STOREFRONTS]);
+      setShowingMockOnly(true);
     } finally {
       setLoading(false);
     }
@@ -937,6 +1006,18 @@ export function ProjectsView() {
             >
               Retry
             </Button>
+          </motion.div>
+        )}
+
+        {/* Example Storefronts Info Banner */}
+        {showingMockOnly && !error && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 rounded-lg border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-sm text-violet-400"
+          >
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="flex-1">Example storefronts — Generate your first website with AI!</span>
           </motion.div>
         )}
 

@@ -392,6 +392,22 @@ function VoiceInputSection() {
   const sessionIdRef = useRef<string>(`builder-${Date.now()}`);
   const [activeQuickReplies, setActiveQuickReplies] = useState<string[]>([]);
 
+  // --- Real voice recording refs & state ---
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isMicSupported, setIsMicSupported] = useState<boolean | null>(null);
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
+
+  // Check mic support on mount
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      setIsMicSupported(true);
+    } else {
+      setIsMicSupported(false);
+    }
+  }, []);
+
   // Auto-scroll chat
   useEffect(() => {
     if (chatEndRef.current) {
@@ -399,13 +415,18 @@ function VoiceInputSection() {
     }
   }, [chatMessages]);
 
-  // Cleanup timers and WebSocket on unmount
+  // Cleanup timers, WebSocket, and media recorder on unmount
   useEffect(() => {
     return () => {
       simTimerRef.current.forEach(clearTimeout);
+      if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
       if (socketRef.current?.connected) {
         socketRef.current.disconnect();
         socketRef.current = null;
+      }
+      // Stop any active media recorder
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
       }
     };
   }, []);
@@ -414,6 +435,49 @@ function VoiceInputSection() {
   const hasBusinessProfile = businessProfile !== null;
   const allChatMessages = chatMessages;
 
+  // --- Helper: map API business profile response to BusinessProfile type ---
+  const mapApiBusinessProfile = useCallback((apiProfile: Record<string, unknown>): BusinessProfile => {
+    const validCategories: BusinessCategory[] = ['bakery', 'restaurant', 'clothing', 'electronics', 'salon', 'grocery', 'hardware', 'medical', 'boutique', 'service', 'other'];
+    const validThemes: BusinessProfile['style']['theme'][] = ['modern', 'classic', 'minimal', 'bold', 'elegant'];
+
+    return {
+      name: (apiProfile.businessName as string) || (apiProfile.name as string) || 'My Business',
+      category: validCategories.includes(apiProfile.category as BusinessCategory) ? (apiProfile.category as BusinessCategory) : 'other',
+      description: (apiProfile.description as string) || '',
+      location: (apiProfile.location as string) || '',
+      phone: (apiProfile.phone as string) || '',
+      email: (apiProfile.email as string) || '',
+      hours: (apiProfile.hours as string) || '',
+      products: Array.isArray(apiProfile.products)
+        ? (apiProfile.products as Array<Record<string, string>>).map((p) => ({
+            name: p.name || '',
+            description: p.description || '',
+            price: p.price || '',
+            category: p.category || '',
+          }))
+        : [],
+      services: Array.isArray(apiProfile.services)
+        ? (apiProfile.services as Array<Record<string, string>>).map((s) => ({
+            name: s.name || '',
+            description: s.description || '',
+            duration: s.duration,
+            price: s.price,
+          }))
+        : [],
+      style: {
+        primaryColor: (apiProfile.style as Record<string, string>)?.primaryColor || '#7c3aed',
+        secondaryColor: (apiProfile.style as Record<string, string>)?.secondaryColor || '#06b6d4',
+        fontFamily: (apiProfile.style as Record<string, string>)?.fontFamily || 'Inter',
+        theme: validThemes.includes((apiProfile.style as Record<string, string>)?.theme as BusinessProfile['style']['theme'])
+          ? ((apiProfile.style as Record<string, string>)?.theme as BusinessProfile['style']['theme'])
+          : 'modern',
+        mood: (apiProfile.style as Record<string, string>)?.mood || 'professional',
+      },
+      features: Array.isArray(apiProfile.features) ? (apiProfile.features as string[]) : [],
+    };
+  }, []);
+
+  // --- Fallback mock transcription (kept for no-mic environments) ---
   const simulateTranscription = useCallback(() => {
     const fullText =
       "I own a bakery in Bangalore called The Flour Garden. We specialize in sourdough bread, custom cakes, and artisan pastries. We're located on Church Street. We're open Monday to Saturday 7AM to 9PM, and Sunday 8AM to 6PM. Our popular items include sourdough loaves, cinnamon rolls, and custom celebration cakes. We also do baking workshops on weekends.";
@@ -448,6 +512,110 @@ function VoiceInputSection() {
       }
     }, 40);
     simTimerRef.current.push(typeInterval);
+  }, []);
+
+  // --- Process voice audio via ASR + LLM API ---
+  const processVoiceAudio = useCallback(
+    async (base64Audio: string) => {
+      setIsRecording(false);
+      setSimStage('analyzing');
+
+      try {
+        const res = await fetch('/api/voice/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio: base64Audio }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          setVoiceTranscript(data.transcript);
+          addChatMessage({
+            id: `msg-${Date.now()}`,
+            role: 'user',
+            content: data.transcript,
+            timestamp: Date.now(),
+          });
+          setSimStage('chatting');
+
+          // Use extracted business profile if available
+          if (data.businessProfile) {
+            const profile = mapApiBusinessProfile(data.businessProfile);
+            setBusinessProfile(profile);
+            setSimStage('ready');
+          }
+
+          simulateChat(data.transcript);
+        } else {
+          throw new Error(data.error || 'Voice processing failed');
+        }
+      } catch (error) {
+        console.error('[VoiceProcessing] Error:', error);
+        showToast({
+          title: 'Voice Processing Error',
+          description: 'Could not process audio. Falling back to demo mode.',
+          variant: 'destructive',
+        });
+        setSimStage('idle');
+        // Fall back to mock transcription
+        simulateTranscription();
+      }
+    },
+    [addChatMessage, setBusinessProfile, showToast, simulateTranscription, mapApiBusinessProfile]
+  );
+
+  // --- Real microphone recording ---
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64Audio = (reader.result as string).split(',')[1];
+          processVoiceAudio(base64Audio);
+        };
+        reader.readAsDataURL(audioBlob);
+        stream.getTracks().forEach((track) => track.stop());
+      };
+
+      mediaRecorder.start(100); // collect in 100ms chunks
+      setIsRecording(true);
+      setSimStage('transcribing');
+      setMicPermissionDenied(false);
+
+      // Auto-stop after 30 seconds
+      autoStopTimerRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
+        }
+      }, 30000);
+    } catch (err) {
+      console.warn('[VoiceRecording] Mic access denied or unavailable:', err);
+      setMicPermissionDenied(true);
+      // Fall back to mock transcription
+      simulateTranscription();
+    }
+  }, [processVoiceAudio, simulateTranscription]);
+
+  const stopRecording = useCallback(() => {
+    // Clear auto-stop timer
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
   }, []);
 
   // Shared helper to call the real /api/chat endpoint
@@ -513,13 +681,16 @@ function VoiceInputSection() {
         timestamp: Date.now(),
       });
 
-      // Show business profile after a delay
-      simTimerRef.current.push(
-        setTimeout(() => {
-          setBusinessProfile(MOCK_BUSINESS_PROFILE);
-          setSimStage('ready');
-        }, 800)
-      );
+      // Only set MOCK_BUSINESS_PROFILE as fallback if no profile is set yet
+      // (voice flow already sets profile via processVoiceAudio)
+      if (!useAppStore.getState().businessProfile) {
+        simTimerRef.current.push(
+          setTimeout(() => {
+            setBusinessProfile(MOCK_BUSINESS_PROFILE);
+            setSimStage('ready');
+          }, 800)
+        );
+      }
 
       // Send one more automated follow-up after a delay
       simTimerRef.current.push(
@@ -767,12 +938,30 @@ function VoiceInputSection() {
       timestamp: Date.now(),
     });
 
-    // Show business profile after enough messages
+    // Extract business profile after enough messages via API
     if (result.messageCount >= 2 && !businessProfile) {
-      setTimeout(() => {
-        setBusinessProfile(MOCK_BUSINESS_PROFILE);
-        setSimStage('ready');
-      }, 800);
+      // Try real extraction API, fall back to mock
+      (async () => {
+        try {
+          const allMessages = useAppStore.getState().chatMessages;
+          const profileRes = await fetch('/api/extract-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: allMessages }),
+          });
+          const profileData = await profileRes.json();
+          if (profileData.success && profileData.businessProfile) {
+            setBusinessProfile(profileData.businessProfile);
+            setSimStage('ready');
+          } else {
+            throw new Error(profileData.error || 'Extraction failed');
+          }
+        } catch (err) {
+          console.error('[ExtractProfile] Failed, using mock:', err);
+          setBusinessProfile(MOCK_BUSINESS_PROFILE);
+          setSimStage('ready');
+        }
+      })();
     }
   };
 
@@ -798,11 +987,21 @@ function VoiceInputSection() {
   const handleReset = () => {
     simTimerRef.current.forEach(clearTimeout);
     simTimerRef.current = [];
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
     // Disconnect WebSocket
     if (socketRef.current?.connected) {
       socketRef.current.disconnect();
       socketRef.current = null;
     }
+    // Stop any active media recorder
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    audioChunksRef.current = [];
     apiResultRef.current = null;
     generationCompletedRef.current = false;
     clearChat();
@@ -876,9 +1075,13 @@ function VoiceInputSection() {
                         )}
                         onClick={() => {
                           if (simStage === 'idle') {
-                            simulateTranscription();
+                            if (isMicSupported && !micPermissionDenied) {
+                              startRecording();
+                            } else {
+                              simulateTranscription();
+                            }
                           } else if (isRecording) {
-                            setIsRecording(false);
+                            stopRecording();
                           }
                         }}
                       >
@@ -900,7 +1103,12 @@ function VoiceInputSection() {
                       </p>
                       {!isRecording && simStage === 'idle' && (
                         <p className="text-xs text-muted-foreground mt-1">
-                          Speak naturally — AI will extract everything
+                          {micPermissionDenied
+                            ? 'Microphone unavailable — using demo mode'
+                            : isMicSupported
+                              ? 'Speak naturally — AI will extract everything'
+                              : 'Voice not supported — click for demo mode'
+                          }
                         </p>
                       )}
                     </div>
@@ -1202,7 +1410,7 @@ function VoiceInputSection() {
               </CardHeader>
               <Separator />
               <CardContent className="p-4 space-y-3">
-                <BusinessInfoCards profile={MOCK_BUSINESS_PROFILE} />
+                <BusinessInfoCards profile={businessProfile || MOCK_BUSINESS_PROFILE} />
               </CardContent>
             </Card>
           </motion.div>
