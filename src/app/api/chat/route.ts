@@ -3,6 +3,7 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { db } from '@/lib/db';
 import { validateInput, chatRequestSchema } from '@/lib/validation';
 import { rateLimit } from '@/lib/rate-limit';
+import { consolidateProfile, assembleBusinessProfile, recallByCategory } from '@/lib/semantic-memory';
 
 const SYSTEM_PROMPT = `You are StoreCraft AI, an intelligent assistant that helps small business owners create professional websites by understanding their business through conversation.
 
@@ -127,12 +128,57 @@ export async function POST(request: NextRequest) {
       quickReplies = ['Generate my website', 'I need online ordering', 'Add WhatsApp button'];
     }
 
+    // --- Semantic Memory: persist extracted facts asynchronously ---
+    if (totalMessages >= 2) {
+      // Fire-and-forget: try to extract and store key facts from conversation
+      (async () => {
+        try {
+          const memories = await recallByCategory(sid, 'business_profile');
+          if (memories.length === 0) {
+            // No memories yet — extract from conversation
+            const convText = history
+              .filter(m => m.role !== 'system')
+              .map(m => `${m.role}: ${m.content}`)
+              .join('\n');
+
+            const zai2 = await ZAI.create();
+            const extractResult = await zai2.chat.completions.create({
+              messages: [
+                {
+                  role: 'assistant',
+                  content: 'Extract key business facts from the conversation. Return JSON with these fields (use null for unknown): business_name, business_type, location, phone, email, hours, style_preference, products_count (number), services_count (number). Only valid JSON, no markdown.',
+                },
+                { role: 'user', content: convText },
+              ],
+              thinking: { type: 'disabled' },
+            });
+
+            try {
+              const raw = (extractResult.choices[0]?.message?.content || '{}')
+                .replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+              const facts = JSON.parse(raw);
+              if (facts && typeof facts === 'object') {
+                await consolidateProfile(sid, facts, { source: 'chat', confidence: 0.7 });
+              }
+            } catch { /* skip */ }
+          }
+        } catch { /* non-blocking */ }
+      })();
+    }
+
+    // Check if we have a stored business profile to return to the frontend
+    let storedProfile = null;
+    try {
+      storedProfile = await assembleBusinessProfile(sid);
+    } catch { /* skip */ }
+
     return NextResponse.json({
       success: true,
       response: aiResponse,
       quickReplies,
       messageCount: totalMessages,
       sessionId: sid,
+      ...(storedProfile && { businessProfile: storedProfile }),
     });
   } catch (error) {
     console.error('[CHAT_POST]', error);

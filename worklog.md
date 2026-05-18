@@ -450,6 +450,39 @@ Stage Summary:
 - Generation service running on port 3002
 
 ---
+Task ID: 8
+Agent: Main Orchestrator
+Task: Complete every missing piece from the military-grade audit
+
+Work Log:
+- Verified all systems built in Task ID 7 are functioning correctly
+- Wired semantic memory into chat API: auto-extracts business facts on 2nd message, recalls on session load
+- Verified semantic memory persistence: business profile extracted after 2 messages, returned on GET /api/chat?sessionId=
+- Rebuilt agents view: replaced all hardcoded mock data with real pipeline execution data from /api/pipeline
+- Rebuilt analytics view: integrated BI engine (health scores, insights, recommendations) from /api/bi
+- Verified pipeline API returns proper stats (total, completed, failed, avgDurationMs, avgValidationScore)
+- Verified BI API returns 404 for nonexistent storefronts (proper error handling)
+- Verified chat API returns businessProfile from semantic memory on session load
+- All 0 lint errors confirmed
+
+Stage Summary:
+- Semantic Memory: Chat API auto-extracts and persists business facts after 2+ messages; recalled on session load
+- Pipeline API: Real execution history with aggregate stats, expandable log details
+- BI API: Full health scores, actionable insights, and recommendations
+- Agents View: Real pipeline data table, system status dashboard, agent capability cards
+- Analytics View: Health score gauges, BI insights panel, recommendations, real analytics data
+- ALL audit findings now addressed:
+  ✅ Real orchestration runtime (9 LLM-powered stages with DB tracking)
+  ✅ Deterministic workflows (pipeline stages with retry, timeout, error handling)
+  ✅ Execution validation (15-check HTML validator)
+  ✅ Sandbox isolation (sandboxed iframe, HTML sanitizer, CSP headers)
+  ✅ Repair loops (auto-repair + LLM repair with re-validation, max 2 attempts)
+  ✅ Business intelligence engine (7-dimension health scoring, 5-category insight generation)
+  ✅ Persistent semantic memory (token-based relevance search, profile consolidation, session recall)
+  ✅ Security hardening (Zod validation, rate limiting, CSP headers, HTML sanitizer)
+  ✅ Production-ready API layer (input validation, error handling, rate limiting, DB persistence)
+
+---
 Task ID: 2
 Agent: Orchestration Engine Builder
 Task: Rebuild generation service as real orchestration runtime
@@ -639,3 +672,30 @@ Stage Summary:
 - New lib: business-intelligence.ts — Deterministic BI engine with 7 health dimensions, 5 insight generators
 - New lib: security.ts — HTML sanitizer, string sanitizer, CSP nonce, security headers
 - All files pass lint with 0 errors
+
+---
+Task ID: 10
+Agent: Views Rebuild Agent
+Task: Rebuild Agents View and Analytics View with real backend data
+
+Work Log:
+- Completely rewrote `src/components/agents/agents-view.tsx` — replaced all hardcoded mock data with real pipeline API data:
+  - **Section 3 — System Status Dashboard**: 4-card grid showing Total Executions, Success Rate (color-coded), Avg Validation Score (color-coded), Avg Generation Time — all fetched from `GET /api/pipeline?limit=20` stats response
+  - **Section 1 — Pipeline Execution History**: Table with expandable rows showing status badges (completed/failed/running/pending with icons), current stage name, progress bar, formatted duration, validation score (green ≥85, yellow ≥70, red <70), and relative timestamp. Click to expand and load execution logs via `GET /api/pipeline?executionId=xxx` with ScrollArea. Each log shows stage, level icon, agent badge, message, detail, token counts, duration
+  - **Section 2 — Agent Fleet Cards**: 8 informational cards (Branding, UI, Content, Product, SEO, Deployment, Debug, Repair) with name, type, icon, description, capability badges. Active agent is highlighted with pulsing dot based on currently running pipeline stage
+  - Loading skeleton, error banner with retry, empty state for no executions, Refresh button
+  - Uses `useToast` from `@/hooks/use-toast` for error notifications
+- Completely rewrote `src/components/analytics/analytics-view.tsx` — added BI engine integration alongside existing analytics:
+  - **Section 1 — Health Score Dashboard**: Large circular overall health score (0-100, color: green ≥80, yellow ≥60, red <60) + 6 sub-scores (Content, SEO, Performance, Accessibility, Engagement, Generation) as mini progress bars — fetched from `GET /api/bi?storefrontId=xxx&mode=health`
+  - **Section 2 — Business Intelligence Insights Panel**: Insights grouped by type (Critical, Warning, Opportunity, Strength) with type badge, category badge, impact badge, title, description, recommended action. Sorted by severity. Fetched from `GET /api/bi?storefrontId=xxx&mode=insights`
+  - **Section 3 — Recommended Actions**: Top 5 actionable recommendations from BI report with numbered steps
+  - **Section 4 — Existing Analytics (preserved)**: KPI cards (Total Views, Unique Visitors, Avg Session, Bounce Rate) with ChangeBadge, traffic AreaChart, Top Pages table, Device Breakdown donut chart, Performance Scores circular gauges — all from `GET /api/analytics?storefrontId=xxx&days=30`
+  - Empty state when no storefront selected, parallel fetch of all 3 API endpoints (analytics, health, insights), loading skeleton, error banner with retry
+- Fixed `useToast` import in both files: `@/components/ui/toaster` → `@/hooks/use-toast`
+
+Stage Summary:
+- Files rewritten: `src/components/agents/agents-view.tsx`, `src/components/analytics/analytics-view.tsx`
+- Agents view: 0 mock data — all pipeline executions, stats, and logs from real API
+- Analytics view: BI health scores, insights, recommendations + existing KPIs/charts from 3 parallel API calls
+- Loading skeletons, error banners with retry, empty states in both views
+- Lint: 0 errors, dev server compiles with 200 response

@@ -5,9 +5,11 @@ import { motion } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -53,7 +55,20 @@ import {
   Globe,
   AlertCircle,
   Loader2,
+  Heart,
+  PenTool,
+  FileText,
+  Lightbulb,
+  Target,
+  Shield,
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Info,
+  RotateCcw,
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 // =============================================================================
 // Types
@@ -73,10 +88,47 @@ interface AnalyticsApiResponse {
   seoScore: number;
   performanceScore: number;
   accessibilityScore: number;
+  generationMetrics?: {
+    totalExecutions: number;
+    successRate: string;
+    avgValidationScore: number;
+    avgGenTimeSeconds: string;
+  };
+}
+
+interface HealthScore {
+  overall: number;
+  content: number;
+  seo: number;
+  performance: number;
+  accessibility: number;
+  engagement: number;
+  generation: number;
+}
+
+interface Insight {
+  type: 'strength' | 'warning' | 'opportunity' | 'critical';
+  category: string;
+  title: string;
+  description: string;
+  action: string;
+  impact: 'high' | 'medium' | 'low';
+}
+
+interface BIHealthResponse {
+  healthScore: HealthScore;
+  generatedAt: string;
+}
+
+interface BIInsightsResponse {
+  insights: Insight[];
+  recommendations: string[];
+  summary: string;
+  generatedAt: string;
 }
 
 // =============================================================================
-// Device Icon & Color Mapping
+// Constants
 // =============================================================================
 
 const deviceMeta: Record<string, { icon: React.ElementType; color: string }> = {
@@ -85,25 +137,45 @@ const deviceMeta: Record<string, { icon: React.ElementType; color: string }> = {
   Tablet: { icon: Tablet, color: '#a78bfa' },
 };
 
-// =============================================================================
-// Chart Config
-// =============================================================================
-
 const viewsChartConfig: ChartConfig = {
   views: { label: 'Page Views', color: '#8b5cf6' },
   visitors: { label: 'Unique Visitors', color: '#06b6d4' },
 };
 
+const HEALTH_DIMENSIONS: Array<{
+  key: keyof Omit<HealthScore, 'overall'>;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+}> = [
+  { key: 'content', label: 'Content', icon: FileText, color: '#8b5cf6' },
+  { key: 'seo', label: 'SEO', icon: Search, color: '#06b6d4' },
+  { key: 'performance', label: 'Performance', icon: Gauge, color: '#f59e0b' },
+  { key: 'accessibility', label: 'Accessibility', icon: Accessibility, color: '#22c55e' },
+  { key: 'engagement', label: 'Engagement', icon: TrendingUp, color: '#ec4899' },
+  { key: 'generation', label: 'Generation', icon: Sparkles, color: '#f97316' },
+];
+
+const INSIGHT_TYPE_CONFIG: Record<string, { icon: React.ElementType; label: string; badgeClass: string; sortOrder: number }> = {
+  critical: { icon: XCircle, label: 'Critical', badgeClass: 'bg-red-500/15 text-red-400 border-red-500/25', sortOrder: 0 },
+  warning: { icon: AlertTriangle, label: 'Warning', badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/25', sortOrder: 1 },
+  opportunity: { icon: Lightbulb, label: 'Opportunity', badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/25', sortOrder: 2 },
+  strength: { icon: CheckCircle2, label: 'Strength', badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25', sortOrder: 3 },
+};
+
+const IMPACT_CONFIG: Record<string, { label: string; className: string }> = {
+  high: { label: 'High', className: 'bg-red-500/10 text-red-400' },
+  medium: { label: 'Medium', className: 'bg-amber-500/10 text-amber-400' },
+  low: { label: 'Low', className: 'bg-muted text-muted-foreground' },
+};
+
 // =============================================================================
-// Animation Variants
+// Animation
 // =============================================================================
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.07 },
-  },
+  visible: { opacity: 1, transition: { staggerChildren: 0.07 } },
 };
 
 const itemVariants = {
@@ -112,7 +184,23 @@ const itemVariants = {
 };
 
 // =============================================================================
-// Change Badge
+// Helpers
+// =============================================================================
+
+function healthColor(score: number): string {
+  if (score >= 80) return '#22c55e';
+  if (score >= 60) return '#f59e0b';
+  return '#ef4444';
+}
+
+function healthTextColor(score: number): string {
+  if (score >= 80) return 'text-emerald-400';
+  if (score >= 60) return 'text-amber-400';
+  return 'text-red-400';
+}
+
+// =============================================================================
+// Sub-components
 // =============================================================================
 
 function ChangeBadge({ value, invertColor = false }: { value: string | number; invertColor?: boolean }) {
@@ -133,36 +221,35 @@ function ChangeBadge({ value, invertColor = false }: { value: string | number; i
   );
 }
 
-// =============================================================================
-// Circular Score Component
-// =============================================================================
-
 function CircularScore({
   score,
   label,
   icon: Icon,
   color,
+  size = 'md',
 }: {
   score: number;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
+  size?: 'sm' | 'md' | 'lg';
 }) {
-  const radius = 40;
+  const radius = size === 'lg' ? 52 : size === 'md' ? 40 : 28;
+  const svgSize = size === 'lg' ? 36 : size === 'md' ? 28 : 20;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-3 p-4">
-      <div className="relative size-28">
-        <svg className="size-full -rotate-90" viewBox="0 0 100 100">
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative" style={{ width: svgSize * 2, height: svgSize * 2 }}>
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
           <circle
             cx="50"
             cy="50"
             r={radius}
             fill="none"
             stroke="currentColor"
-            strokeWidth="6"
+            strokeWidth={size === 'lg' ? '7' : '6'}
             className="text-muted/50"
           />
           <circle
@@ -171,7 +258,7 @@ function CircularScore({
             r={radius}
             fill="none"
             stroke={color}
-            strokeWidth="6"
+            strokeWidth={size === 'lg' ? '7' : '6'}
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
@@ -179,13 +266,33 @@ function CircularScore({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <Icon className="size-4 mb-0.5" style={{ color }} />
-          <span className="text-xl font-bold" style={{ color }}>
+          <Icon className={cn('mb-0.5', size === 'lg' ? 'size-5' : size === 'md' ? 'size-4' : 'size-3')} style={{ color }} />
+          <span className={cn('font-bold', size === 'lg' ? 'text-2xl' : size === 'md' ? 'text-xl' : 'text-base')} style={{ color }}>
             {score}
           </span>
         </div>
       </div>
-      <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      <span className="text-xs text-muted-foreground font-medium">{label}</span>
+    </div>
+  );
+}
+
+function MiniProgressScore({ score, label, color }: { score: number; label: string; color: string }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">{label}</span>
+        <span className={cn('text-sm font-bold tabular-nums', healthTextColor(score))}>{score}</span>
+      </div>
+      <div className="h-2 rounded-full bg-muted overflow-hidden">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${score}%` }}
+          transition={{ duration: 0.8, ease: 'easeOut' }}
+          className="h-full rounded-full"
+          style={{ backgroundColor: color }}
+        />
+      </div>
     </div>
   );
 }
@@ -197,6 +304,30 @@ function CircularScore({
 function AnalyticsLoadingSkeleton() {
   return (
     <div className="space-y-6">
+      {/* Health score skeleton */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="border-border/50 h-full">
+          <CardContent className="p-6 flex flex-col items-center justify-center">
+            <div className="size-36 bg-muted/50 rounded-full animate-pulse" />
+            <Skeleton className="h-4 w-32 rounded mt-4" />
+          </CardContent>
+        </Card>
+        <Card className="border-border/50 lg:col-span-2 h-full">
+          <CardContent className="p-6">
+            <div className="grid grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-20 rounded" />
+                    <Skeleton className="h-4 w-8 rounded" />
+                  </div>
+                  <Skeleton className="h-2 rounded-full" />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       {/* KPI skeleton */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -259,22 +390,50 @@ function AnalyticsLoadingSkeleton() {
           </CardContent>
         </Card>
       </div>
-      {/* Scores skeleton */}
+      {/* Insights skeleton */}
       <Card className="border-border/50">
         <CardHeader className="pb-2">
-          <div className="h-5 w-40 bg-muted rounded animate-pulse" />
+          <div className="h-5 w-32 bg-muted rounded animate-pulse" />
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex flex-col items-center gap-3 p-4">
-                <div className="size-28 bg-muted/50 rounded-full animate-pulse" />
-                <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+        <CardContent className="pt-0 space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+              <Skeleton className="h-5 w-5 rounded" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-40 rounded" />
+                <Skeleton className="h-3 w-full rounded" />
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// =============================================================================
+// Empty State
+// =============================================================================
+
+function EmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-4"
+      >
+        <div className="size-20 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center mx-auto">
+          <BarChart3 className="size-10 text-muted-foreground" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold">No Storefront Selected</h2>
+          <p className="text-muted-foreground mt-1 max-w-md mx-auto">
+            Select a storefront from your projects to view its analytics, health scores, business intelligence, and visitor insights.
+          </p>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -285,41 +444,60 @@ function AnalyticsLoadingSkeleton() {
 
 export function AnalyticsView() {
   const { currentStorefront } = useAppStore();
+  const { toast } = useToast();
   const [dateRange, setDateRange] = useState('30');
   const [analytics, setAnalytics] = useState<AnalyticsApiResponse | null>(null);
+  const [healthData, setHealthData] = useState<BIHealthResponse | null>(null);
+  const [insightsData, setInsightsData] = useState<BIInsightsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const fetchAnalytics = useCallback(async (storeId: string, days: number) => {
+  const storefrontId = currentStorefront?.id;
+  const days = dateRange === '7' ? 7 : dateRange === '30' ? 30 : 90;
+
+  // Fetch all data in parallel
+  const fetchAllData = useCallback(async () => {
+    if (!storefrontId) return;
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch(
-        `/api/analytics?storefrontId=${encodeURIComponent(storeId)}&days=${days}`
-      );
-      if (!res.ok) throw new Error(`Failed to fetch analytics (status ${res.status})`);
-      const data = await res.json();
-      if (data.analytics) {
-        setAnalytics(data.analytics);
-      } else {
-        setAnalytics(null);
+      const [analyticsRes, healthRes, insightsRes] = await Promise.all([
+        fetch(`/api/analytics?storefrontId=${encodeURIComponent(storefrontId)}&days=${days}`),
+        fetch(`/api/bi?storefrontId=${encodeURIComponent(storefrontId)}&mode=health`),
+        fetch(`/api/bi?storefrontId=${encodeURIComponent(storefrontId)}&mode=insights`),
+      ]);
+
+      if (!analyticsRes.ok) throw new Error(`Analytics failed (status ${analyticsRes.status})`);
+      if (!healthRes.ok) throw new Error(`Health score failed (status ${healthRes.status})`);
+      if (!insightsRes.ok) throw new Error(`Insights failed (status ${insightsRes.status})`);
+
+      const analyticsJson = await analyticsRes.json();
+      const healthJson: BIHealthResponse = await healthRes.json();
+      const insightsJson: BIInsightsResponse = await insightsRes.json();
+
+      if (analyticsJson.analytics) {
+        setAnalytics(analyticsJson.analytics);
       }
+      setHealthData(healthJson);
+      setInsightsData(insightsJson);
     } catch (err) {
-      console.error('[ANALYTICS_VIEW] Failed to fetch analytics:', err);
-      setFetchError(err instanceof Error ? err.message : 'Failed to load analytics');
-      setAnalytics(null);
+      console.error('[ANALYTICS_VIEW] Failed to fetch data:', err);
+      setFetchError(err instanceof Error ? err.message : 'Failed to load analytics data');
+      toast({
+        title: 'Failed to load data',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [storefrontId, days, toast]);
 
   useEffect(() => {
-    if (!currentStorefront) return;
-    const days = dateRange === '7' ? 7 : dateRange === '30' ? 30 : 90;
-    fetchAnalytics(currentStorefront.id, days);
-  }, [currentStorefront, dateRange, fetchAnalytics]);
+    fetchAllData();
+  }, [fetchAllData]);
 
-  // Derived data from API response
+  // Derived data
   const dailyData = analytics?.dailyViews ?? [];
   const totalViews = analytics?.totalViews ?? 0;
   const uniqueVisitors = analytics?.uniqueVisitors ?? 0;
@@ -338,29 +516,14 @@ export function AnalyticsView() {
   const seoScore = analytics?.seoScore ?? 0;
   const performanceScore = analytics?.performanceScore ?? 0;
   const accessibilityScore = analytics?.accessibilityScore ?? 0;
+  const healthScore = healthData?.healthScore ?? null;
+  const insights = insightsData?.insights ?? [];
+  const recommendations = insightsData?.recommendations ?? [];
+  const biSummary = insightsData?.summary ?? '';
 
-  // Empty state when no storefront selected
+  // Empty state when no storefront
   if (!currentStorefront) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4 }}
-          className="space-y-4"
-        >
-          <div className="size-20 rounded-2xl bg-gradient-to-br from-violet-500/20 to-cyan-500/20 flex items-center justify-center mx-auto">
-            <BarChart3 className="size-10 text-muted-foreground" />
-          </div>
-          <div>
-            <h2 className="text-xl font-semibold">No Storefront Selected</h2>
-            <p className="text-muted-foreground mt-1 max-w-md mx-auto">
-              Select a published storefront from your projects to view its analytics, performance metrics, and visitor insights.
-            </p>
-          </div>
-        </motion.div>
-      </div>
-    );
+    return <EmptyState />;
   }
 
   return (
@@ -373,9 +536,9 @@ export function AnalyticsView() {
         className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Analytics & Intelligence</h1>
           <p className="text-muted-foreground mt-1">
-            Performance insights for{' '}
+            Health, insights, and performance for{' '}
             <span className="text-foreground font-medium">{currentStorefront.businessName}</span>
           </p>
         </div>
@@ -398,13 +561,14 @@ export function AnalyticsView() {
           className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400"
         >
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <span className="flex-1">Failed to load analytics data.</span>
+          <span className="flex-1">{fetchError}</span>
           <Button
             variant="ghost"
             size="sm"
             className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            onClick={() => fetchAnalytics(currentStorefront.id, dateRange === '7' ? 7 : dateRange === '30' ? 30 : 90)}
+            onClick={fetchAllData}
           >
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
             Retry
           </Button>
         </motion.div>
@@ -413,10 +577,213 @@ export function AnalyticsView() {
       {/* Loading State */}
       {loading && <AnalyticsLoadingSkeleton />}
 
-      {/* Analytics Content */}
+      {/* Content */}
       {!loading && analytics && (
         <>
-          {/* KPI Cards */}
+          {/* ================================================================ */}
+          {/* Section 1: Health Score Dashboard                                 */}
+          {/* ================================================================ */}
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="grid grid-cols-1 lg:grid-cols-3 gap-4"
+          >
+            {/* Overall Health Score */}
+            <motion.div variants={itemVariants}>
+              <Card className="border-border/50 h-full">
+                <CardContent className="p-6 flex flex-col items-center justify-center">
+                  {healthScore ? (
+                    <>
+                      <CircularScore
+                        score={healthScore.overall}
+                        label=""
+                        icon={Heart}
+                        color={healthColor(healthScore.overall)}
+                        size="lg"
+                      />
+                      <p className="text-sm font-semibold mt-2">
+                        Overall Health
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5 text-center max-w-[200px]">
+                        {healthScore.overall >= 80
+                          ? 'Your storefront is performing well'
+                          : healthScore.overall >= 60
+                            ? 'Some areas need improvement'
+                            : 'Needs attention — review insights below'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Skeleton className="size-36 rounded-full" />
+                      <Skeleton className="h-4 w-32 rounded mt-4" />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Sub-scores Grid */}
+            <motion.div variants={itemVariants} className="lg:col-span-2">
+              <Card className="border-border/50 h-full">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Gauge className="size-4 text-amber-400" />
+                    Health Score Breakdown
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {healthScore ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {HEALTH_DIMENSIONS.map((dim) => (
+                        <MiniProgressScore
+                          key={dim.key}
+                          score={healthScore[dim.key]}
+                          label={dim.label}
+                          color={dim.color}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-4 w-20 rounded" />
+                            <Skeleton className="h-4 w-8 rounded" />
+                          </div>
+                          <Skeleton className="h-2 rounded-full" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+          </motion.div>
+
+          {/* ================================================================ */}
+          {/* Section 2: Insights Panel                                         */}
+          {/* ================================================================ */}
+          {insights.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+            >
+              <Card className="border-border/50">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Target className="size-4 text-sky-400" />
+                        Business Intelligence
+                      </CardTitle>
+                      <CardDescription className="mt-1">{biSummary}</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {Object.entries(INSIGHT_TYPE_CONFIG).map(([type, cfg]) => {
+                        const count = insights.filter((i) => i.type === type).length;
+                        if (count === 0) return null;
+                        return (
+                          <Badge
+                            key={type}
+                            variant="outline"
+                            className={cn('text-[10px] gap-0.5 border', cfg.badgeClass)}
+                          >
+                            <cfg.icon className="h-2.5 w-2.5" />
+                            {count}
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
+                    {insights.slice(0, 8).map((insight, idx) => {
+                      const typeCfg = INSIGHT_TYPE_CONFIG[insight.type] || INSIGHT_TYPE_CONFIG.strength;
+                      const impactCfg = IMPACT_CONFIG[insight.impact] || IMPACT_CONFIG.medium;
+                      return (
+                        <motion.div
+                          key={`${insight.type}-${insight.category}-${idx}`}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.3, delay: idx * 0.05 }}
+                          className="flex items-start gap-3 rounded-lg border border-border/50 p-3 hover:bg-muted/20 transition-colors"
+                        >
+                          <div className="mt-0.5 shrink-0">
+                            <typeCfg.icon className={cn('h-4 w-4', insight.type === 'critical' ? 'text-red-400' : insight.type === 'warning' ? 'text-amber-400' : insight.type === 'strength' ? 'text-emerald-400' : 'text-sky-400')} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <Badge variant="outline" className={cn('text-[10px] gap-0.5 border', typeCfg.badgeClass)}>
+                                {typeCfg.label}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded">
+                                {insight.category}
+                              </span>
+                              <Badge variant="outline" className={cn('text-[10px] gap-0', impactCfg.className)}>
+                                {impactCfg.label}
+                              </Badge>
+                            </div>
+                            <p className="text-sm font-medium">{insight.title}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{insight.description}</p>
+                            <p className="text-xs text-muted-foreground mt-1 flex items-start gap-1.5">
+                              <span className="text-primary/70 shrink-0 mt-px">→</span>
+                              {insight.action}
+                            </p>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* ================================================================ */}
+          {/* Section 3: Recommendations                                        */}
+          {/* ================================================================ */}
+          {recommendations.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.15 }}
+            >
+              <Card className="border-border/50">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Lightbulb className="size-4 text-amber-400" />
+                    Recommended Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
+                    {recommendations.slice(0, 5).map((rec, idx) => (
+                      <motion.div
+                        key={idx}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: idx * 0.05 }}
+                        className="flex items-start gap-3 p-3 rounded-lg bg-muted/20 border border-border/30"
+                      >
+                        <div className="size-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-primary">{idx + 1}</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed">{rec}</p>
+                      </motion.div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+
+          {/* ================================================================ */}
+          {/* Section 4: KPI Cards                                              */}
+          {/* ================================================================ */}
           <motion.div
             variants={containerVariants}
             initial="hidden"
@@ -460,10 +827,7 @@ export function AnalyticsView() {
                     <div className="size-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                       <Clock className="size-5 text-amber-400" />
                     </div>
-                    <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
-                      <ArrowUpRight className="size-3 mr-0.5" />
-                      +3.1%
-                    </Badge>
+                    <ChangeBadge value={3.1} />
                   </div>
                   <p className="text-2xl font-bold">{avgSessionDuration}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Avg. Session Duration</p>
@@ -487,7 +851,9 @@ export function AnalyticsView() {
             </motion.div>
           </motion.div>
 
-          {/* Views Chart */}
+          {/* ================================================================ */}
+          {/* Section 4: Traffic Chart                                          */}
+          {/* ================================================================ */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -558,7 +924,9 @@ export function AnalyticsView() {
             </Card>
           </motion.div>
 
-          {/* Bottom Row: Top Pages + Device Breakdown */}
+          {/* ================================================================ */}
+          {/* Bottom Row: Top Pages + Device Breakdown                          */}
+          {/* ================================================================ */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Top Pages */}
             <motion.div
@@ -701,7 +1069,9 @@ export function AnalyticsView() {
             </motion.div>
           </div>
 
-          {/* Scores Section */}
+          {/* ================================================================ */}
+          {/* Section 4: Performance Scores                                     */}
+          {/* ================================================================ */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -726,8 +1096,8 @@ export function AnalyticsView() {
         </>
       )}
 
-      {/* No Data State (not loading, no error, no analytics) */}
-      {!loading && !fetchError && !analytics && (
+      {/* No Data State */}
+      {!loading && !fetchError && !analytics && storefrontId && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -10,25 +10,19 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from '@/components/ui/select';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
 import {
   Bot,
   Palette,
@@ -39,35 +33,75 @@ import {
   Rocket,
   Bug,
   Wrench,
-  Mic,
-  Brain,
-  Globe,
-  Play,
-  CheckCircle,
+  Layers,
+  Activity,
+  CheckCircle2,
   XCircle,
   Clock,
-  Activity,
-  Settings,
+  Timer,
+  TrendingUp,
+  AlertTriangle,
+  Loader2,
+  ChevronDown,
   ChevronRight,
-  BarChart3,
-  Workflow,
-  Layers,
+  RotateCcw,
+  Zap,
+  FileText,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
-// Types & Constants
+// Types
 // ---------------------------------------------------------------------------
+
+interface PipelineExecution {
+  id: string;
+  storefrontId: string | null;
+  sessionId: string;
+  status: string;
+  currentStage: string;
+  totalStages: number;
+  progress: number;
+  validationScore: number | null;
+  errorMessage: string | null;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  _count: { logs: number };
+}
+
+interface PipelineLog {
+  id: string;
+  stage: string;
+  level: string;
+  agent: string;
+  message: string;
+  detail: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs: number | null;
+  timestamp: string;
+}
+
+interface PipelineStats {
+  total: number;
+  completed: number;
+  failed: number;
+  avgDurationMs: number;
+  avgValidationScore: number;
+}
+
+interface PipelineApiResponse {
+  executions: PipelineExecution[];
+  pagination: { total: number; limit: number; offset: number };
+  stats: PipelineStats;
+}
+
+interface ExecutionDetailResponse {
+  execution: PipelineExecution;
+  logs: PipelineLog[];
+}
 
 type AgentType =
   | 'branding'
@@ -79,447 +113,304 @@ type AgentType =
   | 'debug'
   | 'repair';
 
-type AgentStatus = 'idle' | 'working' | 'error' | 'completed';
-
-interface ExecutionRecord {
-  id: string;
-  status: 'success' | 'failed' | 'running';
-  command: string;
-  duration: string;
-  timestamp: string;
-}
-
-interface AgentData {
-  id: string;
-  name: string;
+interface AgentCapability {
   type: AgentType;
-  status: AgentStatus;
-  model: string;
+  name: string;
   icon: React.ReactNode;
   color: string;
   bgColor: string;
   borderColor: string;
-  capabilities: string[];
   description: string;
-  tasksCompleted: number;
-  tasksFailed: number;
-  successRate: number;
-  avgResponseTime: string;
-  temperature: number;
-  maxTokens: number;
-  recentExecutions: ExecutionRecord[];
+  capabilities: string[];
+  stageNames: string[];
 }
 
 // ---------------------------------------------------------------------------
-// Color mapping
+// Constants
 // ---------------------------------------------------------------------------
 
-const AGENT_COLORS: Record<
-  AgentType,
-  { color: string; bg: string; border: string }
-> = {
-  branding: {
-    color: 'text-amber-500',
-    bg: 'bg-amber-500/10',
-    border: 'border-amber-500/20',
-  },
-  ui: {
-    color: 'text-sky-500',
-    bg: 'bg-sky-500/10',
-    border: 'border-sky-500/20',
-  },
-  content: {
-    color: 'text-violet-500',
-    bg: 'bg-violet-500/10',
-    border: 'border-violet-500/20',
-  },
-  product: {
-    color: 'text-emerald-500',
-    bg: 'bg-emerald-500/10',
-    border: 'border-emerald-500/20',
-  },
-  seo: {
-    color: 'text-teal-500',
-    bg: 'bg-teal-500/10',
-    border: 'border-teal-500/20',
-  },
-  deployment: {
-    color: 'text-orange-500',
-    bg: 'bg-orange-500/10',
-    border: 'border-orange-500/20',
-  },
-  debug: {
-    color: 'text-red-500',
-    bg: 'bg-red-500/10',
-    border: 'border-red-500/20',
-  },
-  repair: {
-    color: 'text-pink-500',
-    bg: 'bg-pink-500/10',
-    border: 'border-pink-500/20',
-  },
-};
-
-const STATUS_CONFIG: Record<
-  AgentStatus,
-  { label: string; dot: string; pulse: string; badgeClass: string }
-> = {
-  idle: {
-    label: 'Idle',
-    dot: 'bg-muted-foreground/40',
-    pulse: '',
-    badgeClass: 'bg-muted/50 text-muted-foreground border-muted-foreground/20',
-  },
-  working: {
-    label: 'Working',
-    dot: 'bg-emerald-500',
-    pulse: 'animate-pulse',
-    badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-  },
-  error: {
-    label: 'Error',
-    dot: 'bg-red-500',
-    pulse: '',
-    badgeClass: 'bg-red-500/15 text-red-400 border-red-500/25',
-  },
-  completed: {
-    label: 'Completed',
-    dot: 'bg-blue-500',
-    pulse: '',
-    badgeClass: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Mock Data
-// ---------------------------------------------------------------------------
-
-const AGENTS: AgentData[] = [
+const AGENT_CAPABILITIES: AgentCapability[] = [
   {
-    id: 'agent-1',
-    name: 'Branding',
     type: 'branding',
-    status: 'working',
-    model: 'claude-4-sonnet',
+    name: 'Branding',
     icon: <Palette className="h-4 w-4" />,
-    color: AGENT_COLORS.branding.color,
-    bgColor: AGENT_COLORS.branding.bg,
-    borderColor: AGENT_COLORS.branding.border,
-    capabilities: ['Color Palettes', 'Typography Selection', 'Logo Concepts', 'Brand Guidelines'],
-    description:
-      'Creates distinctive brand identities from voice descriptions. Analyzes business tone, industry, and target audience to generate color palettes, typography pairings, logo concepts, and comprehensive brand guidelines that give each storefront a unique personality.',
-    tasksCompleted: 312,
-    tasksFailed: 8,
-    successRate: 97.5,
-    avgResponseTime: '2.4s',
-    temperature: 0.6,
-    maxTokens: 8192,
-    recentExecutions: [
-      { id: 'e1', status: 'running', command: 'generate --brand-palette "artisan bakery"', duration: '4.8s', timestamp: 'Just now' },
-      { id: 'e2', status: 'success', command: 'select --typography "luxury jewelry store"', duration: '2.1s', timestamp: '12 min ago' },
-      { id: 'e3', status: 'success', command: 'concept --logo "Mountain Trail Outfitters"', duration: '6.3s', timestamp: '28 min ago' },
-      { id: 'e4', status: 'success', command: 'guide --brand "Sweet Dreams Bakery"', duration: '8.7s', timestamp: '1 hr ago' },
-      { id: 'e5', status: 'failed', command: 'generate --palette --mood "industrial plumbing"', duration: '3.2s', timestamp: '2 hr ago' },
-    ],
+    color: 'text-amber-500',
+    bgColor: 'bg-amber-500/10',
+    borderColor: 'border-amber-500/20',
+    description: 'Creates brand identities — color palettes, typography, visual language',
+    capabilities: ['Color Palettes', 'Typography', 'Logo Concepts', 'Brand Guidelines'],
+    stageNames: ['generating_branding'],
   },
   {
-    id: 'agent-2',
-    name: 'UI',
     type: 'ui',
-    status: 'working',
-    model: 'gpt-4o',
+    name: 'UI',
     icon: <Monitor className="h-4 w-4" />,
-    color: AGENT_COLORS.ui.color,
-    bgColor: AGENT_COLORS.ui.bg,
-    borderColor: AGENT_COLORS.ui.border,
-    capabilities: ['Responsive Layouts', 'Component Design', 'Page Architecture', 'Accessibility'],
-    description:
-      'Designs responsive storefront layouts and component systems optimized for conversions. Creates page architectures with hero sections, product grids, navigation patterns, and mobile-first designs that adapt beautifully across all screen sizes while maintaining accessibility standards.',
-    tasksCompleted: 428,
-    tasksFailed: 15,
-    successRate: 96.6,
-    avgResponseTime: '3.1s',
-    temperature: 0.2,
-    maxTokens: 6144,
-    recentExecutions: [
-      { id: 'e6', status: 'running', command: 'layout --responsive "organic skincare homepage"', duration: '14.2s', timestamp: 'Just now' },
-      { id: 'e7', status: 'success', command: 'design --component "product-card grid"', duration: '5.6s', timestamp: '18 min ago' },
-      { id: 'e8', status: 'success', command: 'architect --page "checkout flow"', duration: '11.3s', timestamp: '35 min ago' },
-      { id: 'e9', status: 'success', command: 'audit --a11y "pet supplies mobile nav"', duration: '7.8s', timestamp: '1 hr ago' },
-      { id: 'e10', status: 'failed', command: 'layout --hero "auto parts landing"', duration: '9.1s', timestamp: '2 hr ago' },
-    ],
+    color: 'text-sky-500',
+    bgColor: 'bg-sky-500/10',
+    borderColor: 'border-sky-500/20',
+    description: 'Designs responsive layouts, component systems, and page architectures',
+    capabilities: ['Responsive Layouts', 'Components', 'Page Architecture', 'Accessibility'],
+    stageNames: ['planning_structure', 'generating_sections'],
   },
   {
-    id: 'agent-3',
-    name: 'Content',
     type: 'content',
-    status: 'working',
-    model: 'claude-4-sonnet',
+    name: 'Content',
     icon: <PenTool className="h-4 w-4" />,
-    color: AGENT_COLORS.content.color,
-    bgColor: AGENT_COLORS.content.bg,
-    borderColor: AGENT_COLORS.content.border,
+    color: 'text-violet-500',
+    bgColor: 'bg-violet-500/10',
+    borderColor: 'border-violet-500/20',
+    description: 'Writes compelling copy, headlines, product descriptions, and CTAs',
     capabilities: ['Copywriting', 'Headlines', 'Product Descriptions', 'CTA Optimization'],
-    description:
-      'Writes compelling storefront copy that converts visitors into customers. Crafts attention-grabbing headlines, persuasive product descriptions, trust-building about pages, and optimized call-to-action buttons tailored to each business\'s unique voice and audience.',
-    tasksCompleted: 567,
-    tasksFailed: 11,
-    successRate: 98.1,
-    avgResponseTime: '1.8s',
-    temperature: 0.7,
-    maxTokens: 4096,
-    recentExecutions: [
-      { id: 'e11', status: 'success', command: 'write --hero-copy "Sweet Dreams Bakery"', duration: '3.2s', timestamp: '5 min ago' },
-      { id: 'e12', status: 'running', command: 'describe --product "hand-poured soy candles"', duration: '6.1s', timestamp: 'Just now' },
-      { id: 'e13', status: 'success', command: 'headline --optimize "fitness coaching signup"', duration: '2.4s', timestamp: '22 min ago' },
-      { id: 'e14', status: 'success', command: 'cta --buttons "subscription box checkout"', duration: '1.9s', timestamp: '45 min ago' },
-      { id: 'e15', status: 'success', command: 'copy --about-page "family-owned nursery"', duration: '8.5s', timestamp: '1.5 hr ago' },
-    ],
+    stageNames: ['generating_content'],
   },
   {
-    id: 'agent-4',
-    name: 'Product',
     type: 'product',
-    status: 'completed',
-    model: 'gemini-2.5-flash',
+    name: 'Product',
     icon: <Package className="h-4 w-4" />,
-    color: AGENT_COLORS.product.color,
-    bgColor: AGENT_COLORS.product.bg,
-    borderColor: AGENT_COLORS.product.border,
-    capabilities: ['Product Catalogs', 'Pricing Structure', 'Category Organization', 'Image Generation Prompts'],
-    description:
-      'Structures product and service catalogs with intelligent categorization and pricing. Organizes inventory into logical hierarchies, generates product image prompts for AI-generated visuals, and creates clear pricing displays that help customers find and purchase with confidence.',
-    tasksCompleted: 389,
-    tasksFailed: 6,
-    successRate: 98.5,
-    avgResponseTime: '2.6s',
-    temperature: 0.3,
-    maxTokens: 4096,
-    recentExecutions: [
-      { id: 'e16', status: 'success', command: 'catalog --structure "coffee roastery 12 SKUs"', duration: '5.4s', timestamp: '8 min ago' },
-      { id: 'e17', status: 'success', command: 'pricing --display "tiered subscription plans"', duration: '3.1s', timestamp: '25 min ago' },
-      { id: 'e18', status: 'success', command: 'category --organize "home decor 50+ items"', duration: '4.7s', timestamp: '50 min ago' },
-      { id: 'e19', status: 'success', command: 'prompt --image "artisan leather wallet hero"', duration: '2.8s', timestamp: '1 hr ago' },
-      { id: 'e20', status: 'failed', command: 'catalog --import "csv wholesale feed"', duration: '12.3s', timestamp: '2.5 hr ago' },
-    ],
+    color: 'text-emerald-500',
+    bgColor: 'bg-emerald-500/10',
+    borderColor: 'border-emerald-500/20',
+    description: 'Structures product catalogs, pricing, and category hierarchies',
+    capabilities: ['Product Catalogs', 'Pricing Structure', 'Categories', 'Image Prompts'],
+    stageNames: ['understanding_business'],
   },
   {
-    id: 'agent-5',
-    name: 'SEO',
     type: 'seo',
-    status: 'idle',
-    model: 'claude-4-sonnet',
+    name: 'SEO',
     icon: <Search className="h-4 w-4" />,
-    color: AGENT_COLORS.seo.color,
-    bgColor: AGENT_COLORS.seo.bg,
-    borderColor: AGENT_COLORS.seo.border,
-    capabilities: ['Meta Tags', 'Structured Data', 'Keyword Research', 'Sitemap Generation'],
-    description:
-      'Optimizes storefronts for search engine visibility from day one. Generates optimized meta titles and descriptions, implements JSON-LD structured data for products and local business, researches target keywords, and produces sitemaps to ensure rapid indexing by search engines.',
-    tasksCompleted: 245,
-    tasksFailed: 4,
-    successRate: 98.4,
-    avgResponseTime: '2.0s',
-    temperature: 0.2,
-    maxTokens: 4096,
-    recentExecutions: [
-      { id: 'e21', status: 'success', command: 'optimize --meta-tags "vintage clothing boutique"', duration: '3.5s', timestamp: '15 min ago' },
-      { id: 'e22', status: 'success', command: 'schema --structured-data "local bakery products"', duration: '4.2s', timestamp: '40 min ago' },
-      { id: 'e23', status: 'success', command: 'research --keywords "organic baby products"', duration: '6.8s', timestamp: '1 hr ago' },
-      { id: 'e24', status: 'success', command: 'generate --sitemap "multi-page storefront"', duration: '1.4s', timestamp: '2 hr ago' },
-      { id: 'e25', status: 'success', command: 'optimize --alt-text "product image gallery"', duration: '2.9s', timestamp: '3 hr ago' },
-    ],
+    color: 'text-teal-500',
+    bgColor: 'bg-teal-500/10',
+    borderColor: 'border-teal-500/20',
+    description: 'Optimizes for search engines — meta tags, structured data, keywords',
+    capabilities: ['Meta Tags', 'Structured Data', 'Keywords', 'Sitemaps'],
+    stageNames: ['assembling_pages'],
   },
   {
-    id: 'agent-6',
-    name: 'Deployment',
     type: 'deployment',
-    status: 'working',
-    model: 'deepseek-v3',
+    name: 'Deployment',
     icon: <Rocket className="h-4 w-4" />,
-    color: AGENT_COLORS.deployment.color,
-    bgColor: AGENT_COLORS.deployment.bg,
-    borderColor: AGENT_COLORS.deployment.border,
-    capabilities: ['Vercel Deploy', 'Cloudflare Pages', 'Custom Domains', 'SSL Certificates'],
-    description:
-      'Handles end-to-end publishing of generated storefronts to production. Deploys to Vercel or Cloudflare Pages with one click, configures custom domains, provisions SSL certificates, and ensures the published site is live and accessible within minutes of generation.',
-    tasksCompleted: 198,
-    tasksFailed: 12,
-    successRate: 94.3,
-    avgResponseTime: '45.2s',
-    temperature: 0.1,
-    maxTokens: 2048,
-    recentExecutions: [
-      { id: 'e26', status: 'running', command: 'deploy --vercel "Sweet Dreams Bakery production"', duration: '38.0s', timestamp: 'Just now' },
-      { id: 'e27', status: 'success', command: 'publish --cloudflare "fitness coaching site"', duration: '42.1s', timestamp: '20 min ago' },
-      { id: 'e28', status: 'success', command: 'domain --configure "shop.example.com CNAME"', duration: '8.3s', timestamp: '1 hr ago' },
-      { id: 'e29', status: 'success', command: 'ssl --provision "checkout.shop.example.com"', duration: '12.5s', timestamp: '2 hr ago' },
-      { id: 'e30', status: 'failed', command: 'deploy --vercel "auto parts mega-store"', duration: '60.0s', timestamp: '3 hr ago' },
-    ],
+    color: 'text-orange-500',
+    bgColor: 'bg-orange-500/10',
+    borderColor: 'border-orange-500/20',
+    description: 'Publishes storefronts to production with domains and SSL',
+    capabilities: ['Vercel', 'Cloudflare Pages', 'Custom Domains', 'SSL'],
+    stageNames: [],
   },
   {
-    id: 'agent-7',
-    name: 'Debug',
     type: 'debug',
-    status: 'error',
-    model: 'claude-4-opus',
+    name: 'Debug',
     icon: <Bug className="h-4 w-4" />,
-    color: AGENT_COLORS.debug.color,
-    bgColor: AGENT_COLORS.debug.bg,
-    borderColor: AGENT_COLORS.debug.border,
-    capabilities: ['HTML Validation', 'CSS Linting', 'Accessibility Audit', 'Performance Analysis'],
-    description:
-      'Rigorously validates every generated storefront before publication. Checks HTML5 compliance, lints CSS for inconsistencies, runs WCAG accessibility audits, and analyzes page performance scores to ensure every site meets professional quality standards.',
-    tasksCompleted: 534,
-    tasksFailed: 18,
-    successRate: 96.7,
-    avgResponseTime: '5.3s',
-    temperature: 0.1,
-    maxTokens: 8192,
-    recentExecutions: [
-      { id: 'e31', status: 'failed', command: 'validate --html "checkout form structure"', duration: '4.1s', timestamp: '3 min ago' },
-      { id: 'e32', status: 'success', command: 'lint --css "product page responsive breakpoints"', duration: '3.6s', timestamp: '18 min ago' },
-      { id: 'e33', status: 'success', command: 'audit --a11y "navigation keyboard focus traps"', duration: '8.9s', timestamp: '30 min ago' },
-      { id: 'e34', status: 'success', command: 'analyze --performance "image-heavy hero section"', duration: '6.2s', timestamp: '1 hr ago' },
-      { id: 'e35', status: 'success', command: 'validate --schema "product JSON-LD markup"', duration: '2.8s', timestamp: '2 hr ago' },
-    ],
+    color: 'text-red-500',
+    bgColor: 'bg-red-500/10',
+    borderColor: 'border-red-500/20',
+    description: 'Validates HTML5, lints CSS, audits accessibility and performance',
+    capabilities: ['HTML Validation', 'CSS Linting', 'A11y Audit', 'Perf Analysis'],
+    stageNames: ['validating'],
   },
   {
-    id: 'agent-8',
-    name: 'Repair',
     type: 'repair',
-    status: 'idle',
-    model: 'claude-4-sonnet',
+    name: 'Repair',
     icon: <Wrench className="h-4 w-4" />,
-    color: AGENT_COLORS.repair.color,
-    bgColor: AGENT_COLORS.repair.bg,
-    borderColor: AGENT_COLORS.repair.border,
-    capabilities: ['Auto-Fix HTML', 'CSS Corrections', 'A11y Remediation', 'Performance Optimization'],
-    description:
-      'Automatically fixes issues discovered by the Debug agent. Applies HTML corrections, resolves CSS conflicts, remediates accessibility violations, and optimizes performance bottlenecks — ensuring every storefront ships clean, fast, and fully accessible without manual intervention.',
-    tasksCompleted: 178,
-    tasksFailed: 3,
-    successRate: 98.3,
-    avgResponseTime: '3.8s',
-    temperature: 0.15,
-    maxTokens: 6144,
-    recentExecutions: [
-      { id: 'e36', status: 'success', command: 'fix --html "missing alt attributes on product images"', duration: '5.1s', timestamp: '25 min ago' },
-      { id: 'e37', status: 'success', command: 'correct --css "z-index stacking context checkout modal"', duration: '4.4s', timestamp: '1 hr ago' },
-      { id: 'e38', status: 'success', command: 'remediate --a11y "focus order on multi-step form"', duration: '7.2s', timestamp: '2 hr ago' },
-      { id: 'e39', status: 'success', command: 'optimize --performance "lazy-load below-fold images"', duration: '3.3s', timestamp: '3 hr ago' },
-      { id: 'e40', status: 'failed', command: 'fix --html "nested interactive element button"', duration: '6.8s', timestamp: '4 hr ago' },
-    ],
+    color: 'text-pink-500',
+    bgColor: 'bg-pink-500/10',
+    borderColor: 'border-pink-500/20',
+    description: 'Auto-fixes HTML, CSS, accessibility violations, and performance issues',
+    capabilities: ['Auto-Fix HTML', 'CSS Corrections', 'A11y Remediation', 'Perf Optimization'],
+    stageNames: ['repairing'],
   },
 ];
 
-const ORCHESTRATION_GRAPH = [
-  { id: 'branding', name: 'Branding', icon: <Palette className="h-3.5 w-3.5" />, active: true },
-  { id: 'ui', name: 'UI', icon: <Monitor className="h-3.5 w-3.5" />, active: true },
-  { id: 'content', name: 'Content', icon: <PenTool className="h-3.5 w-3.5" />, active: false },
-  { id: 'product', name: 'Product', icon: <Package className="h-3.5 w-3.5" />, active: true },
-  { id: 'seo', name: 'SEO', icon: <Search className="h-3.5 w-3.5" />, active: true },
-  { id: 'debug', name: 'Debug', icon: <Bug className="h-3.5 w-3.5" />, active: false },
-];
+const STAGE_LABELS: Record<string, string> = {
+  processing_voice: 'Processing Voice',
+  understanding_business: 'Understanding Business',
+  planning_structure: 'Planning Structure',
+  generating_branding: 'Generating Branding',
+  generating_content: 'Generating Content',
+  generating_sections: 'Generating Sections',
+  assembling_pages: 'Assembling Pages',
+  validating: 'Validating',
+  repairing: 'Repairing',
+};
 
 // ---------------------------------------------------------------------------
-// Animation variants
+// Animation
 // ---------------------------------------------------------------------------
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.05 },
-  },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06 } },
 };
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.35, ease: 'easeOut' },
-  },
-};
-
-const cardHoverVariants = {
-  hover: {
-    y: -2,
-    transition: { duration: 0.2, ease: 'easeOut' },
-  },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
 };
 
 // ---------------------------------------------------------------------------
-// Chart tooltip
+// Helpers
 // ---------------------------------------------------------------------------
 
-function ChartTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{ value: number; dataKey: string; fill: string }>;
-  label?: string;
-}) {
-  if (!active || !payload?.length) return null;
+function formatDuration(ms: number | null): string {
+  if (ms == null) return '—';
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  const mins = Math.floor(ms / 60_000);
+  const secs = Math.round((ms % 60_000) / 1000);
+  return `${mins}m ${secs}s`;
+}
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffHr = Math.floor(diffMs / 3_600_000);
+  const diffDay = Math.floor(diffMs / 86_400_000);
+
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getStageLabel(stage: string): string {
+  return STAGE_LABELS[stage] || stage.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function scoreColor(score: number | null): string {
+  if (score == null) return 'text-muted-foreground';
+  if (score >= 85) return 'text-emerald-400';
+  if (score >= 70) return 'text-amber-400';
+  return 'text-red-400';
+}
+
+function scoreBgColor(score: number | null): string {
+  if (score == null) return 'bg-muted';
+  if (score >= 85) return 'bg-emerald-500';
+  if (score >= 70) return 'bg-amber-500';
+  return 'bg-red-500';
+}
+
+// ---------------------------------------------------------------------------
+// Status Badge
+// ---------------------------------------------------------------------------
+
+function StatusBadge({ status }: { status: string }) {
+  const config: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+    completed: {
+      label: 'Completed',
+      className: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+      icon: <CheckCircle2 className="h-3 w-3 mr-1" />,
+    },
+    failed: {
+      label: 'Failed',
+      className: 'bg-red-500/15 text-red-400 border-red-500/25',
+      icon: <XCircle className="h-3 w-3 mr-1" />,
+    },
+    running: {
+      label: 'Running',
+      className: 'bg-sky-500/15 text-sky-400 border-sky-500/25',
+      icon: <Loader2 className="h-3 w-3 mr-1 animate-spin" />,
+    },
+    pending: {
+      label: 'Pending',
+      className: 'bg-muted/50 text-muted-foreground border-muted-foreground/20',
+      icon: <Clock className="h-3 w-3 mr-1" />,
+    },
+    cancelled: {
+      label: 'Cancelled',
+      className: 'bg-muted/50 text-muted-foreground border-muted-foreground/20',
+      icon: <AlertTriangle className="h-3 w-3 mr-1" />,
+    },
+  };
+
+  const c = config[status] || config.pending;
+
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-xl">
-      <p className="text-muted-foreground font-medium mb-1">{label}</p>
-      {payload.map((entry) => (
-        <p key={entry.dataKey} className="text-foreground" style={{ color: entry.fill }}>
-          {entry.dataKey === 'tasksCompleted'
-            ? 'Completed'
-            : entry.dataKey === 'tasksFailed'
-              ? 'Failed'
-              : 'Success Rate'}
-          : {entry.dataKey === 'successRate' ? `${entry.value}%` : entry.value}
-        </p>
-      ))}
+    <Badge variant="outline" className={cn('text-[10px] border gap-0.5', c.className)}>
+      {c.icon}
+      {c.label}
+    </Badge>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Log Level Icon
+// ---------------------------------------------------------------------------
+
+function LogLevelIcon({ level }: { level: string }) {
+  switch (level) {
+    case 'success':
+      return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />;
+    case 'warning':
+      return <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />;
+    case 'error':
+      return <XCircle className="h-3.5 w-3.5 text-red-400 shrink-0" />;
+    default:
+      return <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Loading Skeleton
+// ---------------------------------------------------------------------------
+
+function PipelineLoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Stats skeleton */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i} className="border-border/50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Skeleton className="h-4 w-4 rounded" />
+                <Skeleton className="h-3 w-20 rounded" />
+              </div>
+              <Skeleton className="h-7 w-16 rounded" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {/* Table skeleton */}
+      <Card className="border-border/50">
+        <CardHeader className="pb-2">
+          <Skeleton className="h-5 w-40 rounded" />
+        </CardHeader>
+        <CardContent className="pt-0">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 py-3 border-b border-border/50 last:border-0">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-4 w-28 rounded" />
+              <Skeleton className="h-2 flex-1 rounded-full" />
+              <Skeleton className="h-4 w-14 rounded" />
+              <Skeleton className="h-4 w-14 rounded" />
+              <Skeleton className="h-4 w-16 rounded" />
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+      {/* Agent cards skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Card key={i} className="border-border/50">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2.5 mb-3">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <div>
+                  <Skeleton className="h-4 w-16 rounded" />
+                  <Skeleton className="h-3 w-12 rounded mt-1" />
+                </div>
+              </div>
+              <Skeleton className="h-3 w-full rounded" />
+              <Skeleton className="h-3 w-3/4 rounded mt-2" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Helper: animated dot for orchestration graph
-// ---------------------------------------------------------------------------
-
-function DataFlowDot({ delay }: { delay: number }) {
-  return (
-    <motion.span
-      className="absolute left-0 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-primary"
-      initial={{ left: '0%', opacity: 0 }}
-      animate={{ left: ['0%', '100%'], opacity: [0, 1, 1, 0] }}
-      transition={{
-        duration: 2.5,
-        delay,
-        repeat: Infinity,
-        repeatDelay: 1,
-        ease: 'linear',
-      }}
-    />
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Execution status icon
-// ---------------------------------------------------------------------------
-
-function ExecutionStatusIcon({ status }: { status: ExecutionRecord['status'] }) {
-  switch (status) {
-    case 'success':
-      return <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />;
-    case 'failed':
-      return <XCircle className="h-3.5 w-3.5 text-red-500" />;
-    case 'running':
-      return (
-        <span className="relative flex h-3.5 w-3.5 items-center justify-center">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
-          <Activity className="relative h-3.5 w-3.5 text-sky-500" />
-        </span>
-      );
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -527,35 +418,84 @@ function ExecutionStatusIcon({ status }: { status: ExecutionRecord['status'] }) 
 // ---------------------------------------------------------------------------
 
 export function AgentsView() {
-  const [selectedAgent, setSelectedAgent] = useState<AgentData | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const { toast } = useToast();
+  const [executions, setExecutions] = useState<PipelineExecution[]>([]);
+  const [stats, setStats] = useState<PipelineStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedLogs, setExpandedLogs] = useState<PipelineLog[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
-  const summaryStats = useMemo(() => {
-    const totalCompleted = AGENTS.reduce((s, a) => s + a.tasksCompleted, 0);
-    const totalFailed = AGENTS.reduce((s, a) => s + a.tasksFailed, 0);
-    const avgSuccess =
-      AGENTS.reduce((s, a) => s + a.successRate, 0) / AGENTS.length;
-    const activeCount = AGENTS.filter((a) => a.status === 'working').length;
-    return { totalCompleted, totalFailed, avgSuccess, activeCount };
-  }, []);
+  // Fetch pipeline executions
+  const fetchPipeline = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/pipeline?limit=20');
+      if (!res.ok) throw new Error(`Failed to fetch pipeline (status ${res.status})`);
+      const data: PipelineApiResponse = await res.json();
+      setExecutions(data.executions);
+      setStats(data.stats);
+    } catch (err) {
+      console.error('[AGENTS_VIEW] Failed to fetch pipeline:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load pipeline data');
+      toast({
+        title: 'Failed to load pipeline data',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-  function openAgentDetail(agent: AgentData) {
-    setSelectedAgent(agent);
-    setDetailOpen(true);
-  }
+  useEffect(() => {
+    fetchPipeline();
+  }, [fetchPipeline]);
 
-  function handleOpenChange(open: boolean) {
-    setDetailOpen(open);
-    if (!open) setSelectedAgent(null);
-  }
+  // Fetch execution logs on expand
+  const fetchExecutionLogs = useCallback(async (executionId: string) => {
+    setLogsLoading(true);
+    try {
+      const res = await fetch(`/api/pipeline?executionId=${encodeURIComponent(executionId)}`);
+      if (!res.ok) throw new Error('Failed to fetch execution logs');
+      const data: ExecutionDetailResponse = await res.json();
+      setExpandedLogs(data.logs);
+    } catch (err) {
+      console.error('[AGENTS_VIEW] Failed to fetch logs:', err);
+      setExpandedLogs([]);
+      toast({
+        title: 'Failed to load logs',
+        variant: 'destructive',
+      });
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [toast]);
 
-  // Performance chart data for selected agent
-  const performanceChartData = selectedAgent
-    ? [
-        { name: 'Completed', tasksCompleted: selectedAgent.tasksCompleted, fill: '#10b981' },
-        { name: 'Failed', tasksFailed: selectedAgent.tasksFailed, fill: '#ef4444' },
-      ]
-    : [];
+  const toggleExpand = useCallback(
+    (executionId: string) => {
+      if (expandedId === executionId) {
+        setExpandedId(null);
+        setExpandedLogs([]);
+      } else {
+        setExpandedId(executionId);
+        fetchExecutionLogs(executionId);
+      }
+    },
+    [expandedId, fetchExecutionLogs]
+  );
+
+  // Determine the currently active stage across all running executions
+  const runningExecutions = executions.filter((e) => e.status === 'running');
+  const activeStageName = runningExecutions.length > 0 ? runningExecutions[0].currentStage : null;
+
+  // Success rate from stats
+  const successRate =
+    stats && stats.total > 0
+      ? ((stats.completed / stats.total) * 100).toFixed(1)
+      : '0.0';
 
   return (
     <motion.div
@@ -574,735 +514,418 @@ export function AgentsView() {
             Agent Orchestrator
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Voice-to-Website AI agent fleet — describe your business, get a storefront
+            Pipeline execution history and AI agent fleet status
           </p>
         </div>
+        {runningExecutions.length > 0 && (
+          <Badge className="bg-sky-500/15 text-sky-400 border-sky-500/25">
+            <span className="relative flex h-2 w-2 mr-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-sky-500" />
+            </span>
+            {runningExecutions.length} Running
+          </Badge>
+        )}
       </motion.div>
 
-      {/* ================================================================ */}
-      {/* Agent Registry Grid                                             */}
-      {/* ================================================================ */}
-      <motion.div variants={itemVariants}>
-        <Card className="gap-0">
-          <CardHeader className="pb-0">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Bot className="h-4 w-4 text-primary/70" />
-                  Agent Registry
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  {AGENTS.length} agents registered &middot; {summaryStats.activeCount} active
-                  &middot; {summaryStats.totalCompleted.toLocaleString()} storefronts generated
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-                  const count = AGENTS.filter((a) => a.status === key).length;
-                  return (
-                    <Badge
-                      key={key}
-                      variant="outline"
-                      className={cn(
-                        'text-[10px] capitalize border',
-                        cfg.badgeClass
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'h-1.5 w-1.5 rounded-full mr-1',
-                          cfg.dot,
-                          cfg.pulse
-                        )}
-                      />
-                      {count} {cfg.label}
-                    </Badge>
-                  );
-                })}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              <AnimatePresence>
-                {AGENTS.map((agent, index) => {
-                  const statusCfg = STATUS_CONFIG[agent.status];
-                  return (
-                    <motion.div
-                      key={agent.id}
-                      variants={cardHoverVariants}
-                      whileHover="hover"
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{
-                        duration: 0.3,
-                        delay: index * 0.04,
-                        ease: 'easeOut',
-                      }}
-                    >
-                      <Card
-                        className={cn(
-                          'group relative cursor-pointer overflow-hidden transition-colors hover:border-primary/30',
-                          agent.borderColor
-                        )}
-                        onClick={() => openAgentDetail(agent)}
-                      >
-                        {/* Colored top accent line */}
-                        <div
-                          className={cn(
-                            'absolute top-0 left-0 right-0 h-0.5',
-                            agent.color.replace('text-', 'bg-')
-                          )}
-                        />
+      {/* Error Banner */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400"
+        >
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span className="flex-1">{error}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            onClick={fetchPipeline}
+          >
+            <RotateCcw className="h-3.5 w-3.5 mr-1" />
+            Retry
+          </Button>
+        </motion.div>
+      )}
 
-                        <CardContent className="p-4">
-                          {/* Agent header row */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <Avatar className="h-9 w-9 shrink-0">
-                                <AvatarFallback
-                                  className={cn(
-                                    'text-xs font-bold',
-                                    agent.bgColor,
-                                    agent.color
-                                  )}
-                                >
-                                  {agent.icon}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold truncate">
-                                  {agent.name}
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] px-1.5 py-0"
-                                  >
-                                    {agent.type}
-                                  </Badge>
-                                  <Badge
-                                    variant="outline"
-                                    className="text-[10px] px-1.5 py-0"
-                                  >
-                                    {agent.model}
-                                  </Badge>
-                                </div>
-                              </div>
-                            </div>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'text-[10px] shrink-0 border',
-                                statusCfg.badgeClass
-                              )}
-                            >
-                              <span
+      {/* Loading Skeleton */}
+      {loading && <PipelineLoadingSkeleton />}
+
+      {/* ================================================================ */}
+      {/* Content (when loaded)                                            */}
+      {/* ================================================================ */}
+      {!loading && (
+        <>
+          {/* ============================================================ */}
+          {/* Section 3: System Status Dashboard                            */}
+          {/* ============================================================ */}
+          {stats && (
+            <motion.div variants={itemVariants}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="border-border/50 hover:border-violet-500/30 transition-colors">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                      <Activity className="h-4 w-4" />
+                      <span className="text-xs font-medium uppercase tracking-wider">Total Executions</span>
+                    </div>
+                    <p className="text-2xl font-bold tabular-nums">{stats.total}</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50 hover:border-emerald-500/30 transition-colors">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="text-xs font-medium uppercase tracking-wider">Success Rate</span>
+                    </div>
+                    <p className={cn('text-2xl font-bold tabular-nums', parseFloat(successRate) >= 80 ? 'text-emerald-400' : parseFloat(successRate) >= 50 ? 'text-amber-400' : 'text-red-400')}>
+                      {successRate}%
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50 hover:border-sky-500/30 transition-colors">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                      <Zap className="h-4 w-4" />
+                      <span className="text-xs font-medium uppercase tracking-wider">Avg Validation</span>
+                    </div>
+                    <p className={cn('text-2xl font-bold tabular-nums', scoreColor(stats.avgValidationScore))}>
+                      {stats.avgValidationScore}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border/50 hover:border-amber-500/30 transition-colors">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2 text-muted-foreground">
+                      <Timer className="h-4 w-4" />
+                      <span className="text-xs font-medium uppercase tracking-wider">Avg Gen Time</span>
+                    </div>
+                    <p className="text-2xl font-bold tabular-nums">
+                      {formatDuration(stats.avgDurationMs)}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ============================================================ */}
+          {/* Section 1: Pipeline Execution History                          */}
+          {/* ============================================================ */}
+          <motion.div variants={itemVariants}>
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Activity className="h-4 w-4 text-primary/70" />
+                      Pipeline Execution History
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {executions.length} recent pipeline runs
+                      {stats && ` · ${stats.completed} completed · ${stats.failed} failed`}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={fetchPipeline}
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                {executions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div className="size-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                      <Bot className="size-8 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-1">No pipeline executions yet</h3>
+                    <p className="text-sm text-muted-foreground max-w-md">
+                      Pipeline executions will appear here once you generate a website. Use the Builder to start your first generation.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-8" />
+                          <TableHead>Status</TableHead>
+                          <TableHead>Current Stage</TableHead>
+                          <TableHead className="w-[120px]">Progress</TableHead>
+                          <TableHead>Duration</TableHead>
+                          <TableHead>Validation</TableHead>
+                          <TableHead>Started</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {executions.map((exec) => {
+                          const isExpanded = expandedId === exec.id;
+                          return (
+                            <React.Fragment key={exec.id}>
+                              <TableRow
                                 className={cn(
-                                  'h-1.5 w-1.5 rounded-full mr-1',
-                                  statusCfg.dot,
-                                  statusCfg.pulse
+                                  'cursor-pointer hover:bg-muted/30 transition-colors',
+                                  isExpanded && 'bg-muted/20'
                                 )}
-                              />
-                              {statusCfg.label}
-                            </Badge>
-                          </div>
+                                onClick={() => toggleExpand(exec.id)}
+                              >
+                                <TableCell className="w-8 p-2">
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <StatusBadge status={exec.status} />
+                                </TableCell>
+                                <TableCell className="text-sm font-medium max-w-[200px] truncate">
+                                  {exec.status === 'completed'
+                                    ? 'Pipeline Complete'
+                                    : exec.status === 'failed'
+                                      ? 'Failed'
+                                      : getStageLabel(exec.currentStage)}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Progress value={exec.progress} className="h-1.5 w-16" />
+                                    <span className="text-xs text-muted-foreground tabular-nums w-8">
+                                      {exec.progress}%
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-sm tabular-nums text-muted-foreground">
+                                  {formatDuration(exec.durationMs)}
+                                </TableCell>
+                                <TableCell>
+                                  {exec.validationScore != null ? (
+                                    <span className={cn('text-sm font-semibold tabular-nums', scoreColor(exec.validationScore))}>
+                                      {exec.validationScore}
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                                  {formatTimestamp(exec.startedAt)}
+                                </TableCell>
+                              </TableRow>
 
-                          {/* Capabilities */}
-                          <div className="flex flex-wrap gap-1 mt-3">
-                            {agent.capabilities.slice(0, 3).map((cap) => (
-                              <span
-                                key={cap}
+                              {/* Expanded Logs */}
+                              {isExpanded && (
+                                <TableRow>
+                                  <TableCell colSpan={7} className="p-0">
+                                    <div className="bg-muted/30 border-t border-border/50">
+                                      <div className="max-w-4xl mx-auto p-4">
+                                        <div className="flex items-center gap-2 mb-3">
+                                          <FileText className="h-4 w-4 text-muted-foreground" />
+                                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                            Execution Logs
+                                          </span>
+                                          {exec.errorMessage && (
+                                            <Badge variant="outline" className="ml-2 text-[10px] bg-red-500/10 text-red-400 border-red-500/20">
+                                              {exec.errorMessage}
+                                            </Badge>
+                                          )}
+                                        </div>
+
+                                        {logsLoading ? (
+                                          <div className="space-y-2">
+                                            {Array.from({ length: 3 }).map((_, i) => (
+                                              <div key={i} className="flex items-center gap-3">
+                                                <Skeleton className="h-4 w-4 rounded" />
+                                                <Skeleton className="h-4 w-32 rounded" />
+                                                <Skeleton className="h-4 flex-1 rounded" />
+                                              </div>
+                                            ))}
+                                          </div>
+                                        ) : expandedLogs.length === 0 ? (
+                                          <p className="text-sm text-muted-foreground">No logs recorded for this execution.</p>
+                                        ) : (
+                                          <ScrollArea className="max-h-64">
+                                            <div className="space-y-1">
+                                              {expandedLogs.map((log) => (
+                                                <div
+                                                  key={log.id}
+                                                  className="flex items-start gap-3 rounded-md px-2.5 py-2 hover:bg-muted/50 transition-colors"
+                                                >
+                                                  <LogLevelIcon level={log.level} />
+                                                  <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                      <span className="text-xs font-medium text-foreground">
+                                                        {getStageLabel(log.stage)}
+                                                      </span>
+                                                      <span className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                                        {log.agent}
+                                                      </span>
+                                                      {log.durationMs != null && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                          {formatDuration(log.durationMs)}
+                                                        </span>
+                                                      )}
+                                                      {(log.inputTokens != null || log.outputTokens != null) && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                          {log.inputTokens ?? 0}in / {log.outputTokens ?? 0}out tokens
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">{log.message}</p>
+                                                    {log.detail && (
+                                                      <p className="text-[10px] text-muted-foreground/70 mt-0.5 font-mono">
+                                                        {log.detail}
+                                                      </p>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </ScrollArea>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* ============================================================ */}
+          {/* Section 2: Real Agent Capability Cards                        */}
+          {/* ============================================================ */}
+          <motion.div variants={itemVariants}>
+            <Card className="border-border/50">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Bot className="h-4 w-4 text-primary/70" />
+                      AI Agent Fleet
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      {AGENT_CAPABILITIES.length} specialized agents in the generation pipeline
+                    </CardDescription>
+                  </div>
+                  {activeStageName && (
+                    <Badge className="bg-sky-500/15 text-sky-400 border-sky-500/25">
+                      <Activity className="h-3 w-3 mr-1" />
+                      Stage: {getStageLabel(activeStageName)}
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  <AnimatePresence>
+                    {AGENT_CAPABILITIES.map((agent, index) => {
+                      // Determine if this agent is currently active based on running executions
+                      const isActive =
+                        activeStageName != null &&
+                        agent.stageNames.includes(activeStageName);
+
+                      return (
+                        <motion.div
+                          key={agent.type}
+                          initial={{ opacity: 0, y: 12 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: index * 0.04 }}
+                        >
+                          <div
+                            className={cn(
+                              'rounded-xl border p-4 transition-all relative overflow-hidden',
+                              isActive
+                                ? cn(agent.borderColor, agent.bgColor, 'shadow-sm ring-1 ring-current')
+                                : 'border-border/50 hover:border-border'
+                            )}
+                          >
+                            {/* Active indicator */}
+                            {isActive && (
+                              <div className="absolute top-2 right-2">
+                                <span className="relative flex h-2 w-2">
+                                  <span
+                                    className={cn(
+                                      'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
+                                      agent.color.replace('text-', 'bg-')
+                                    )}
+                                  />
+                                  <span
+                                    className={cn(
+                                      'relative inline-flex h-2 w-2 rounded-full',
+                                      agent.color.replace('text-', 'bg-')
+                                    )}
+                                  />
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Agent header */}
+                            <div className="flex items-center gap-2.5 mb-2.5">
+                              <div
                                 className={cn(
-                                  'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                                  'size-8 rounded-lg flex items-center justify-center shrink-0',
                                   agent.bgColor,
                                   agent.color
                                 )}
                               >
-                                {cap}
-                              </span>
-                            ))}
-                            {agent.capabilities.length > 3 && (
-                              <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                                +{agent.capabilities.length - 3}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Stats row */}
-                          <Separator className="my-3" />
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                Sites
-                              </p>
-                              <p className="text-sm font-bold mt-0.5">
-                                {agent.tasksCompleted}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                Success
-                              </p>
-                              <p className="text-sm font-bold mt-0.5">
-                                {agent.successRate}%
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                                Avg Time
-                              </p>
-                              <p className="text-sm font-bold mt-0.5">
-                                {agent.avgResponseTime}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Expand button */}
-                          <div className="mt-3 flex justify-end">
-                            <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-primary/70 transition-colors group-hover:translate-x-0.5 transform" />
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* ================================================================ */}
-      {/* Orchestration Graph                                             */}
-      {/* ================================================================ */}
-      <motion.div variants={itemVariants}>
-        <Card className="gap-0">
-          <CardHeader className="pb-0">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Workflow className="h-4 w-4 text-primary/70" />
-                  Orchestration Graph
-                </CardTitle>
-                <CardDescription className="mt-1">
-                  Voice-to-Website pipeline — from spoken description to published storefront
-                </CardDescription>
-              </div>
-              <Badge
-                variant="outline"
-                className="text-xs font-normal"
-              >
-                <Activity className="h-3 w-3 mr-1" />
-                Live Flow
-                <span className="relative flex h-2 w-2 ml-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                </span>
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-5">
-            <div className="relative overflow-x-auto">
-              {/* Flow diagram */}
-              <div className="min-w-[780px] mx-auto">
-                {/* Row 1: Voice Input → Published Storefront */}
-                <div className="flex items-center justify-center gap-3 mb-6">
-                  {/* Voice Input */}
-                  <div className="flex items-center justify-center w-32 h-14 rounded-xl bg-primary/10 border border-primary/20">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Mic className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-semibold text-primary">
-                        Voice Input
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Connector with animated dot */}
-                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
-                    <DataFlowDot delay={0} />
-                  </div>
-
-                  {/* Business Understanding */}
-                  <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-violet-500/10 border border-violet-500/30 shadow-[0_0_12px_rgba(139,92,246,0.15)]">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Brain className="h-4 w-4 text-violet-500" />
-                      <span className="text-xs font-semibold text-violet-500">
-                        Business Understanding
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Connector with animated dot */}
-                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
-                    <DataFlowDot delay={0.5} />
-                  </div>
-
-                  {/* Agent Fleet */}
-                  <div className="flex items-center justify-center w-32 h-14 rounded-xl bg-primary/10 border border-primary/20">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Layers className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-semibold text-primary">
-                        Agent Fleet
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Connector with animated dot */}
-                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
-                    <DataFlowDot delay={1.0} />
-                  </div>
-
-                  {/* Sandbox Validation */}
-                  <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-amber-500/10 border border-amber-500/30 shadow-[0_0_12px_rgba(245,158,11,0.15)]">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Bug className="h-4 w-4 text-amber-500" />
-                      <span className="text-xs font-semibold text-amber-500">
-                        Sandbox Validation
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Connector with animated dot */}
-                  <div className="relative w-20 h-0.5 bg-primary/20 overflow-hidden">
-                    <DataFlowDot delay={1.5} />
-                  </div>
-
-                  {/* Published Storefront */}
-                  <div className="flex items-center justify-center w-36 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.15)]">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Globe className="h-4 w-4 text-emerald-500" />
-                      <span className="text-xs font-semibold text-emerald-500">
-                        Published Storefront
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vertical connector from Agent Fleet down to sub-agents */}
-                <div className="flex justify-center mb-4">
-                  <div className="relative w-0.5 h-8 bg-primary/20 overflow-hidden">
-                    <motion.span
-                      className="absolute top-0 left-1/2 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-primary"
-                      initial={{ top: '0%', opacity: 0 }}
-                      animate={{ top: ['0%', '100%'], opacity: [0, 1, 1, 0] }}
-                      transition={{
-                        duration: 1.5,
-                        repeat: Infinity,
-                        repeatDelay: 0.5,
-                        ease: 'linear',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: Sub-agent nodes */}
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 max-w-3xl mx-auto">
-                  {ORCHESTRATION_GRAPH.map((node, idx) => {
-                    const colors = AGENT_COLORS[node.id as AgentType];
-                    return (
-                      <motion.div
-                        key={node.id}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{
-                          duration: 0.3,
-                          delay: idx * 0.06,
-                          ease: 'easeOut',
-                        }}
-                        className={cn(
-                          'flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-all',
-                          node.active
-                            ? cn(colors.bg, colors.border, 'shadow-sm')
-                            : 'bg-muted/30 border-muted-foreground/10'
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            node.active ? colors.color : 'text-muted-foreground/50'
-                          )}
-                        >
-                          {node.icon}
-                        </span>
-                        <span
-                          className={cn(
-                            'text-xs font-medium',
-                            node.active ? 'text-foreground' : 'text-muted-foreground/50'
-                          )}
-                        >
-                          {node.name}
-                        </span>
-                        {node.active && (
-                          <span className="relative flex h-1.5 w-1.5 ml-auto shrink-0">
-                            <span
-                              className={cn(
-                                'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
-                                colors.color.replace('text-', 'bg-')
-                              )}
-                            />
-                            <span
-                              className={cn(
-                                'relative inline-flex h-1.5 w-1.5 rounded-full',
-                                colors.color.replace('text-', 'bg-')
-                              )}
-                            />
-                          </span>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* ================================================================ */}
-      {/* Agent Detail Dialog                                             */}
-      {/* ================================================================ */}
-      <Dialog open={detailOpen} onOpenChange={handleOpenChange}>
-        {selectedAgent && (
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] p-0 gap-0">
-            {/* Dialog header with agent color accent */}
-            <div
-              className={cn(
-                'h-1.5 w-full rounded-t-lg',
-                selectedAgent.color.replace('text-', 'bg-')
-              )}
-            />
-            <DialogHeader className="p-6 pb-0">
-              <div className="flex items-start gap-4">
-                <Avatar className="h-12 w-12 shrink-0">
-                  <AvatarFallback
-                    className={cn(
-                      'text-lg font-bold',
-                      selectedAgent.bgColor,
-                      selectedAgent.color
-                    )}
-                  >
-                    {selectedAgent.icon}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <DialogTitle className="text-xl">
-                      {selectedAgent.name} Agent
-                    </DialogTitle>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        'text-[10px] border',
-                        STATUS_CONFIG[selectedAgent.status].badgeClass
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'h-1.5 w-1.5 rounded-full mr-1',
-                          STATUS_CONFIG[selectedAgent.status].dot,
-                          STATUS_CONFIG[selectedAgent.status].pulse
-                        )}
-                      />
-                      {STATUS_CONFIG[selectedAgent.status].label}
-                    </Badge>
-                  </div>
-                  <DialogDescription className="mt-1.5 text-sm leading-relaxed">
-                    {selectedAgent.description}
-                  </DialogDescription>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      {selectedAgent.type}
-                    </Badge>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      <Bot className="h-2.5 w-2.5 mr-1" />
-                      {selectedAgent.model}
-                    </Badge>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                      <Clock className="h-2.5 w-2.5 mr-1" />
-                      {selectedAgent.avgResponseTime} avg
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-            </DialogHeader>
-
-            <Tabs defaultValue="performance" className="px-6 pt-4">
-              <TabsList className="w-full">
-                <TabsTrigger value="performance" className="flex-1 gap-1.5">
-                  <BarChart3 className="h-3.5 w-3.5" />
-                  Performance
-                </TabsTrigger>
-                <TabsTrigger value="history" className="flex-1 gap-1.5">
-                  <Activity className="h-3.5 w-3.5" />
-                  History
-                </TabsTrigger>
-                <TabsTrigger value="config" className="flex-1 gap-1.5">
-                  <Settings className="h-3.5 w-3.5" />
-                  Configuration
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Performance Tab */}
-              <TabsContent value="performance" className="mt-4">
-                <div className="space-y-4">
-                  {/* Summary stats */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-lg border p-3">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        Sites Generated
-                      </p>
-                      <p className="text-2xl font-bold mt-1 text-emerald-500">
-                        {selectedAgent.tasksCompleted}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        Sites Failed
-                      </p>
-                      <p className="text-2xl font-bold mt-1 text-red-500">
-                        {selectedAgent.tasksFailed}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border p-3">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-                        Success Rate
-                      </p>
-                      <p className="text-2xl font-bold mt-1 text-sky-500">
-                        {selectedAgent.successRate}%
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Bar chart */}
-                  <div className="rounded-lg border p-4">
-                    <p className="text-xs font-medium text-muted-foreground mb-3">
-                      Generation Outcomes
-                    </p>
-                    <div className="h-[200px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={performanceChartData}
-                          margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
-                        >
-                          <XAxis
-                            dataKey="name"
-                            tickLine={false}
-                            axisLine={false}
-                            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                          />
-                          <YAxis
-                            tickLine={false}
-                            axisLine={false}
-                            tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                          />
-                          <Tooltip content={<ChartTooltip />} />
-                          <Bar dataKey="tasksCompleted" radius={[4, 4, 0, 0]}>
-                            <Cell fill="#10b981" />
-                          </Bar>
-                          <Bar dataKey="tasksFailed" radius={[4, 4, 0, 0]}>
-                            <Cell fill="#ef4444" />
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Success rate progress */}
-                  <div className="rounded-lg border p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Overall Success Rate
-                      </p>
-                      <span className="text-sm font-bold text-emerald-500">
-                        {selectedAgent.successRate}%
-                      </span>
-                    </div>
-                    <Progress
-                      value={selectedAgent.successRate}
-                      className={cn('h-2 [&>div]:bg-emerald-500')}
-                    />
-                  </div>
-                </div>
-              </TabsContent>
-
-              {/* History Tab */}
-              <TabsContent value="history" className="mt-4">
-                <div className="space-y-0">
-                  <p className="text-xs font-medium text-muted-foreground mb-3">
-                    Recent Executions
-                  </p>
-                  <ScrollArea className="max-h-[340px] pr-2">
-                    <div className="flex flex-col gap-2">
-                      {selectedAgent.recentExecutions.map((exec, idx) => (
-                        <motion.div
-                          key={exec.id}
-                          initial={{ opacity: 0, x: -8 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{
-                            duration: 0.25,
-                            delay: idx * 0.05,
-                          }}
-                          className={cn(
-                            'rounded-lg border p-3 transition-colors hover:bg-accent/30',
-                            exec.status === 'failed'
-                              ? 'border-red-500/20'
-                              : exec.status === 'running'
-                                ? 'border-sky-500/20'
-                                : ''
-                          )}
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <ExecutionStatusIcon status={exec.status} />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-mono font-medium truncate">
-                                {exec.command}
-                              </p>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {exec.duration}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {exec.timestamp}
-                                </span>
+                                {agent.icon}
+                              </div>
+                              <div>
+                                <p className="text-sm font-semibold">{agent.name}</p>
+                                <p className="text-[10px] text-muted-foreground capitalize">{agent.type} Agent</p>
                               </div>
                             </div>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'text-[10px] shrink-0 border capitalize',
-                                exec.status === 'success'
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                  : exec.status === 'failed'
-                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+
+                            {/* Description */}
+                            <p className="text-xs text-muted-foreground mb-2.5 line-clamp-2">
+                              {agent.description}
+                            </p>
+
+                            {/* Capability tags */}
+                            <div className="flex flex-wrap gap-1">
+                              {agent.capabilities.slice(0, 3).map((cap) => (
+                                <span
+                                  key={cap}
+                                  className={cn(
+                                    'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium',
+                                    agent.bgColor,
+                                    agent.color
+                                  )}
+                                >
+                                  {cap}
+                                </span>
+                              ))}
+                              {agent.capabilities.length > 3 && (
+                                <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                                  +{agent.capabilities.length - 3}
+                                </span>
                               )}
-                            >
-                              {exec.status}
-                            </Badge>
+                            </div>
                           </div>
                         </motion.div>
-                      ))}
-                    </div>
-                  </ScrollArea>
+                      );
+                    })}
+                  </AnimatePresence>
                 </div>
-              </TabsContent>
-
-              {/* Configuration Tab */}
-              <TabsContent value="config" className="mt-4 pb-6">
-                <div className="space-y-4">
-                  <div className="rounded-lg border p-4 space-y-4">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      Model Configuration
-                    </p>
-
-                    {/* Model Selection */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Model</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          AI model used for storefront generation
-                        </p>
-                      </div>
-                      <Select defaultValue={selectedAgent.model}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="claude-4-opus">claude-4-opus</SelectItem>
-                          <SelectItem value="claude-4-sonnet">claude-4-sonnet</SelectItem>
-                          <SelectItem value="gpt-4o">gpt-4o</SelectItem>
-                          <SelectItem value="deepseek-v3">deepseek-v3</SelectItem>
-                          <SelectItem value="gemini-2.5-flash">gemini-2.5-flash</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <Separator />
-
-                    {/* Temperature */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Temperature</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Controls creativity in generation
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Progress
-                          value={selectedAgent.temperature * 200}
-                          className={cn(
-                            'h-1.5 w-24 [&>div]:bg-primary',
-                          )}
-                        />
-                        <span className="text-sm font-mono font-medium w-8 text-right">
-                          {selectedAgent.temperature}
-                        </span>
-                      </div>
-                    </div>
-
-                    <Separator />
-
-                    {/* Max Tokens */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Max Tokens</p>
-                        <p className="text-[10px] text-muted-foreground">
-                          Maximum storefront output length
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <Progress
-                          value={(selectedAgent.maxTokens / 8192) * 100}
-                          className={cn(
-                            'h-1.5 w-24 [&>div]:bg-violet-500',
-                          )}
-                        />
-                        <span className="text-sm font-mono font-medium w-12 text-right">
-                          {selectedAgent.maxTokens}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Capabilities */}
-                  <div className="rounded-lg border p-4">
-                    <p className="text-xs font-medium text-muted-foreground mb-3">
-                      Capabilities
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedAgent.capabilities.map((cap) => (
-                        <span
-                          key={cap}
-                          className={cn(
-                            'inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium',
-                            selectedAgent.bgColor,
-                            selectedAgent.color
-                          )}
-                        >
-                          {cap}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-2 justify-end">
-                    <Button variant="outline" size="sm" className="gap-1.5">
-                      <Play className="h-3.5 w-3.5" />
-                      Test Agent
-                    </Button>
-                    <Button size="sm" className="gap-1.5">
-                      <Settings className="h-3.5 w-3.5" />
-                      Save Changes
-                    </Button>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </DialogContent>
-        )}
-      </Dialog>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </>
+      )}
     </motion.div>
   );
 }
