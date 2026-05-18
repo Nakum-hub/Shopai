@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Eye,
@@ -31,6 +31,8 @@ import {
   Search,
   Copy,
   Download,
+  Phone,
+  Mail,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
@@ -42,6 +44,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -63,10 +66,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { Storefront, StorefrontStatus, BusinessCategory } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import type { Storefront, StorefrontStatus, BusinessCategory, BusinessProfile } from '@/lib/types';
 
 // =============================================================================
-// Mock Storefront Data
+// Mock Storefront Data (used as fallback / example data)
 // =============================================================================
 
 const MOCK_STOREFRONTS: Storefront[] = [
@@ -234,13 +238,105 @@ function getPreviewGradient(category: BusinessCategory): string {
   return categoryGradients[category] || 'from-gray-500 to-slate-600';
 }
 
+/**
+ * Map a raw storefront record from the API to the frontend Storefront type.
+ * Handles JSON parsing for businessProfile, default values for missing fields,
+ * and date conversion.
+ */
+function mapApiStorefront(raw: Record<string, unknown>): Storefront {
+  let businessProfile: BusinessProfile | null = null;
+  if (raw.businessProfile && typeof raw.businessProfile === 'string') {
+    try {
+      businessProfile = JSON.parse(raw.businessProfile) as BusinessProfile;
+    } catch {
+      businessProfile = null;
+    }
+  } else if (raw.businessProfile && typeof raw.businessProfile === 'object') {
+    businessProfile = raw.businessProfile as BusinessProfile;
+  }
+
+  const createdAt = raw.createdAt
+    ? new Date(raw.createdAt as string).toISOString()
+    : new Date().toISOString();
+  const updatedAt = raw.updatedAt
+    ? new Date(raw.updatedAt as string).toISOString()
+    : new Date().toISOString();
+  const publishedAt = raw.publishedAt
+    ? new Date(raw.publishedAt as string).toISOString()
+    : null;
+
+  return {
+    id: raw.id as string,
+    name: (raw.name as string) || 'Untitled',
+    businessName: (raw.businessName as string) || 'Untitled Business',
+    category: (raw.category as BusinessCategory) || 'other',
+    status: (raw.status as StorefrontStatus) || 'draft',
+    description: (raw.description as string) || '',
+    url: (raw.url as string) || '',
+    sections: [], // API doesn't store sections separately
+    html: (raw.html as string) || '',
+    businessProfile,
+    createdAt,
+    updatedAt,
+    publishedAt,
+    viewCount: (raw.viewCount as number) || 0,
+    deploymentStatus: (raw.deploymentStatus as Storefront['deploymentStatus']) || 'none',
+    deploymentUrl: (raw.deploymentUrl as string) || null,
+  };
+}
+
+// =============================================================================
+// Loading Skeleton
+// =============================================================================
+
+function LoadingSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Stats skeleton */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i} className="py-4">
+            <CardContent className="flex items-center gap-3 px-4 py-0">
+              <Skeleton className="h-10 w-10 rounded-lg" />
+              <div className="min-w-0 space-y-1.5">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-6 w-10" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      {/* Card skeleton */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="overflow-hidden">
+            <Skeleton className="h-40 w-full" />
+            <CardContent className="p-4 pt-3 space-y-3">
+              <div className="flex justify-between">
+                <div className="space-y-1.5 min-w-0 flex-1">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-7 w-7 rounded" />
+              </div>
+              <Separator />
+              <div className="flex justify-between">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // =============================================================================
 // Stats Cards
 // =============================================================================
 
-function StatsCards() {
-  const storefronts = MOCK_STOREFRONTS;
-
+function StatsCards({ storefronts }: { storefronts: Storefront[] }) {
   const stats = [
     {
       label: 'Total Storefronts',
@@ -524,22 +620,26 @@ function DetailDialog({
                 <Layers className="h-4 w-4 text-cyan-400" />
                 Sections ({storefront.sections.length})
               </h4>
-              <div className="space-y-1.5">
-                {storefront.sections.map((section, i) => (
-                  <div
-                    key={section.id}
-                    className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm"
-                  >
-                    <span className="flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground font-medium">
-                      {i + 1}
-                    </span>
-                    <span className="flex-1">{section.title}</span>
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                      {section.type}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+              {storefront.sections.length > 0 ? (
+                <div className="space-y-1.5">
+                  {storefront.sections.map((section, i) => (
+                    <div
+                      key={section.id}
+                      className="flex items-center gap-2 rounded-lg border border-border bg-card/50 px-3 py-2 text-sm"
+                    >
+                      <span className="flex h-5 w-5 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground font-medium">
+                        {i + 1}
+                      </span>
+                      <span className="flex-1">{section.title}</span>
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                        {section.type}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No sections configured yet. Edit this storefront to add sections.</p>
+              )}
             </div>
 
             <Separator />
@@ -641,11 +741,60 @@ function InfoItem({
 
 export function ProjectsView() {
   const { setCurrentView, setCurrentStorefront } = useAppStore();
+  const { toast } = useToast();
+
+  // Data state
+  const [storefronts, setStorefronts] = useState<Storefront[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // UI state
   const [selectedStorefront, setSelectedStorefront] = useState<Storefront | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const filteredStorefronts = MOCK_STOREFRONTS.filter(
+  // IDs of mock storefronts (cannot be deleted via API)
+  const mockIds = new Set(MOCK_STOREFRONTS.map((s) => s.id));
+
+  // Fetch real storefronts from the API on mount
+  const fetchStorefronts = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/storefronts');
+      if (!res.ok) {
+        throw new Error(`Failed to fetch storefronts (status ${res.status})`);
+      }
+      const data = await res.json();
+      const rawStorefronts: Storefront[] = (data.storefronts || []).map(mapApiStorefront);
+
+      // If API returns real data, merge it with mock data (mock as examples at the end)
+      if (rawStorefronts.length > 0) {
+        setStorefronts([...rawStorefronts, ...MOCK_STOREFRONTS]);
+      } else {
+        // No real data yet — show mock data as examples
+        setStorefronts([...MOCK_STOREFRONTS]);
+      }
+    } catch (err) {
+      console.error('[PROJECTS_VIEW] Failed to fetch storefronts:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load storefronts');
+      // Fallback to mock data on error
+      setStorefronts([...MOCK_STOREFRONTS]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchStorefronts();
+  }, [fetchStorefronts]);
+
+  // Combined list is already stored in `storefronts` (real + mock)
+  const allStorefronts = storefronts;
+
+  // Filter against the combined list
+  const filteredStorefronts = allStorefronts.filter(
     (s) =>
       s.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.category.toLowerCase().includes(searchQuery.toLowerCase())
@@ -666,15 +815,83 @@ export function ProjectsView() {
     // Could navigate to deploy view
   };
 
-  const handleDelete = (storefront: Storefront) => {
-    // Mock delete - in real app would call API
-    console.log('Delete', storefront.id);
+  const handleDelete = async (storefront: Storefront) => {
+    // Mock storefronts cannot be deleted via API
+    if (mockIds.has(storefront.id)) {
+      toast({
+        title: 'Cannot delete',
+        description: 'This is an example storefront and cannot be deleted.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setDeletingId(storefront.id);
+    try {
+      const res = await fetch(`/api/storefronts?id=${encodeURIComponent(storefront.id)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Delete failed (status ${res.status})`);
+      }
+
+      // Remove from local state
+      setStorefronts((prev) => prev.filter((s) => s.id !== storefront.id));
+      toast({
+        title: 'Storefront deleted',
+        description: `"${storefront.businessName}" has been deleted successfully.`,
+      });
+    } catch (err) {
+      console.error('[PROJECTS_VIEW] Delete failed:', err);
+      toast({
+        title: 'Delete failed',
+        description: err instanceof Error ? err.message : 'Failed to delete storefront. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleCardClick = (storefront: Storefront) => {
     setSelectedStorefront(storefront);
     setDetailOpen(true);
   };
+
+  // Show loading skeleton while fetching
+  if (loading) {
+    return (
+      <TooltipProvider delayDuration={0}>
+        <div className="space-y-6">
+          {/* Header Actions */}
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between"
+          >
+            <div className="relative w-full sm:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search storefronts..."
+                className="pl-9 h-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <Button
+              className="bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-0 hover:opacity-90 gap-2 w-full sm:w-auto"
+              onClick={() => setCurrentView('builder')}
+            >
+              <Plus className="h-4 w-4" />
+              Create New Storefront
+            </Button>
+          </motion.div>
+          <LoadingSkeleton />
+        </div>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -703,8 +920,28 @@ export function ProjectsView() {
           </Button>
         </motion.div>
 
+        {/* Error Banner */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-400"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span className="flex-1">Failed to load storefronts from server. Showing example data below.</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              onClick={fetchStorefronts}
+            >
+              Retry
+            </Button>
+          </motion.div>
+        )}
+
         {/* Stats */}
-        <StatsCards />
+        <StatsCards storefronts={allStorefronts} />
 
         {/* Storefront Grid */}
         {filteredStorefronts.length > 0 ? (

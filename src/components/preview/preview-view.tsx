@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   Monitor,
   Tablet,
@@ -25,6 +25,8 @@ import {
   MessageCircle,
   UserCircle,
   Minus,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -50,6 +52,7 @@ import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { toast } from '@/hooks/use-toast';
 import type { StorefrontSection } from '@/lib/types';
 
 // =============================================================================
@@ -490,6 +493,37 @@ const sectionIcons: Record<string, React.ElementType> = {
 };
 
 // =============================================================================
+// Default business profile for generation when none exists
+// =============================================================================
+
+const DEFAULT_BUSINESS_PROFILE = {
+  name: 'Sweet Dreams Bakery',
+  category: 'bakery',
+  description: 'A charming local bakery specializing in artisan breads, custom cakes, and freshly baked pastries. We use organic, locally-sourced ingredients to craft treats that bring joy to every occasion.',
+  location: '123 Baker Street, Sweetville, CA 90210',
+  phone: '(555) 123-4567',
+  email: 'hello@sweetdreamsbakery.com',
+  hours: 'Mon-Fri 7AM-7PM, Sat 8AM-6PM, Sun 9AM-4PM',
+  products: [
+    { name: 'Chocolate Dream Cake', description: 'Three layers of rich chocolate sponge with Belgian chocolate ganache', price: '$42.00', category: 'Cakes' },
+    { name: 'Artisan Cookie Box', description: 'Assorted hand-decorated cookies with unique seasonal flavors', price: '$18.00', category: 'Cookies' },
+    { name: 'French Croissant Assortment', description: 'Buttery, flaky croissants — plain, almond, and chocolate', price: '$16.00', category: 'Pastries' },
+  ],
+  services: [
+    { name: 'Custom Cake Design', description: 'Personalized cakes for weddings, birthdays, and special events' },
+    { name: 'Catering', description: 'Full-service bakery catering for events and corporate functions' },
+  ],
+  style: {
+    primaryColor: '#8B4513',
+    secondaryColor: '#D2691E',
+    fontFamily: 'Segoe UI',
+    theme: 'elegant',
+    mood: 'warm',
+  },
+  features: ['Fresh Daily Baking', 'Organic Ingredients', 'Custom Orders', 'Delivery Available'],
+};
+
+// =============================================================================
 // Sortable Section Item
 // =============================================================================
 
@@ -619,7 +653,70 @@ function DeviceSwitcher() {
 // =============================================================================
 
 function EmptyState() {
-  const { setCurrentView } = useAppStore();
+  const { setCurrentView, businessProfile } = useAppStore();
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerateWithAI = useCallback(async () => {
+    setIsGenerating(true);
+    try {
+      const profile = businessProfile || DEFAULT_BUSINESS_PROFILE;
+      const res = await fetch('/api/generate/website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessProfile: profile }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        toast({
+          title: 'Generation Failed',
+          description: data.error || 'Failed to generate website. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (data.success && data.html) {
+        // Create a storefront from the generated HTML
+        const { useAppStore: store } = await import('@/store/app-store');
+        const newStorefront = {
+          id: `storefront-${Date.now()}`,
+          name: profile.name || 'Generated Storefront',
+          businessName: profile.name || 'My Business',
+          category: profile.category || 'other',
+          status: 'ready' as const,
+          description: profile.description || '',
+          url: '',
+          sections: MOCK_SECTIONS,
+          html: data.html,
+          businessProfile: profile,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          publishedAt: null,
+          viewCount: 0,
+          deploymentStatus: 'none' as const,
+          deploymentUrl: null,
+        };
+
+        store.getState().addStorefront(newStorefront);
+        store.getState().setCurrentStorefront(newStorefront);
+
+        toast({
+          title: 'Website Generated!',
+          description: 'Your storefront has been created with AI. You can preview it now.',
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Generation Failed',
+        description: err instanceof Error ? err.message : 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [businessProfile]);
 
   return (
     <motion.div
@@ -640,10 +737,27 @@ function EmptyState() {
       <p className="text-muted-foreground max-w-sm mb-8 leading-relaxed">
         Generate a storefront using the AI Builder, or select one from your projects to preview it here.
       </p>
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-3 justify-center">
         <Button
+          onClick={handleGenerateWithAI}
+          disabled={isGenerating}
+          className="bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-0 hover:opacity-90 min-w-[180px]"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4 mr-2" />
+              Generate Website with AI
+            </>
+          )}
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => setCurrentView('builder')}
-          className="bg-gradient-to-r from-violet-600 to-cyan-500 text-white border-0 hover:opacity-90"
         >
           <Sparkles className="h-4 w-4 mr-2" />
           Go to Builder
@@ -667,14 +781,20 @@ function EmptyState() {
 export function PreviewView() {
   const {
     currentStorefront,
+    currentJob,
+    businessProfile,
     previewDevice,
     previewMode,
     setPreviewMode,
     setCurrentView,
+    updateStorefront,
   } = useAppStore();
 
   const [sections, setSections] = useState<StorefrontSection[]>(MOCK_SECTIONS);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
+  const generateAttemptedRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -684,6 +804,17 @@ export function PreviewView() {
     })
   );
 
+  // Resolve the HTML to display: generatedHtml > currentStorefront.html > MOCK_BAKERY_HTML
+  const displayHtml = useMemo(() => {
+    if (generatedHtml) return generatedHtml;
+    if (currentStorefront?.html) return currentStorefront.html;
+    return MOCK_BAKERY_HTML;
+  }, [generatedHtml, currentStorefront?.html]);
+
+  const isAiGenerated = useMemo(() => {
+    return !!generatedHtml || (currentStorefront?.html && currentStorefront.html !== MOCK_BAKERY_HTML);
+  }, [generatedHtml, currentStorefront?.html]);
+
   const deviceWidth = useMemo(() => {
     switch (previewDevice) {
       case 'mobile': return 375;
@@ -692,6 +823,81 @@ export function PreviewView() {
       default: return '100%';
     }
   }, [previewDevice]);
+
+  // When the storefront changes, sync sections and clear generatedHtml if it was for a different storefront
+  useEffect(() => {
+    if (currentStorefront?.sections && currentStorefront.sections.length > 0) {
+      setSections(currentStorefront.sections);
+    } else {
+      setSections(MOCK_SECTIONS);
+    }
+    // Clear local generated HTML when switching storefronts
+    setGeneratedHtml(null);
+    generateAttemptedRef.current = false;
+  }, [currentStorefront?.id]);
+
+  const handleGenerate = useCallback(async () => {
+    setIsGenerating(true);
+    try {
+      const profile = businessProfile || currentStorefront?.businessProfile || DEFAULT_BUSINESS_PROFILE;
+
+      const res = await fetch('/api/generate/website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessProfile: profile }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        toast({
+          title: 'Generation Failed',
+          description: data.error || 'Failed to generate website. Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (data.success && data.html) {
+        setGeneratedHtml(data.html);
+
+        // Also update the storefront if it exists
+        if (currentStorefront) {
+          updateStorefront(currentStorefront.id, {
+            html: data.html,
+            status: 'ready',
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        toast({
+          title: 'Website Regenerated!',
+          description: 'Your storefront has been updated with fresh AI-generated content.',
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Generation Failed',
+        description: err instanceof Error ? err.message : 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [businessProfile, currentStorefront, updateStorefront]);
+
+  // When currentJob completes and there's a storefront, try to fetch the latest HTML
+  useEffect(() => {
+    if (
+      currentJob?.status === 'complete' &&
+      currentStorefront?.id &&
+      !generateAttemptedRef.current &&
+      !currentStorefront.html
+    ) {
+      generateAttemptedRef.current = true;
+      handleGenerate();
+    }
+  }, [currentJob?.status, currentStorefront?.id, currentStorefront?.html, handleGenerate]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -744,6 +950,28 @@ export function PreviewView() {
             </div>
 
             {/* Action Buttons */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="h-3.5 w-3.5 text-violet-400 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5 text-violet-400" />
+                  )}
+                  <span className="hidden sm:inline">{isGenerating ? 'Generating...' : 'Regenerate'}</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isGenerating ? 'Generating with AI...' : 'Regenerate website with AI'}
+              </TooltipContent>
+            </Tooltip>
+
             <Button
               variant="outline"
               size="sm"
@@ -795,6 +1023,24 @@ export function PreviewView() {
             </Tooltip>
           </motion.div>
 
+          {/* AI Generated Badge */}
+          {isAiGenerated && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="flex items-center justify-center gap-2 px-4 py-1.5 bg-violet-500/5 border-b border-violet-500/10"
+            >
+              <Sparkles className="h-3 w-3 text-violet-400" />
+              <span className="text-xs font-medium text-violet-400">AI-Generated Content</span>
+              {isGenerating && (
+                <>
+                  <Loader2 className="h-3 w-3 text-violet-400 animate-spin" />
+                  <span className="text-xs text-muted-foreground">Regenerating...</span>
+                </>
+              )}
+            </motion.div>
+          )}
+
           {/* Preview Frame Container */}
           <div className="flex-1 flex items-start justify-center overflow-auto bg-muted/30 p-6">
             <motion.div
@@ -818,7 +1064,9 @@ export function PreviewView() {
                     <div className="flex-1 flex justify-center">
                       <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
                         <Globe className="h-3 w-3" />
-                        sweetdreamsbakery.com
+                        {currentStorefront.businessName
+                          ? `${currentStorefront.businessName.toLowerCase().replace(/\s+/g, '')}.com`
+                          : 'sweetdreamsbakery.com'}
                       </div>
                     </div>
                   </div>
@@ -832,8 +1080,28 @@ export function PreviewView() {
                   previewDevice !== 'desktop' ? 'rounded-t-none border border-t-0 border-border' : 'border border-border'
                 )}
               >
+                {/* Loading Overlay */}
+                <AnimatePresence>
+                  {isGenerating && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm rounded-xl"
+                    >
+                      <div className="relative mb-4">
+                        <div className="h-16 w-16 rounded-full border-4 border-muted border-t-violet-500 animate-spin" />
+                        <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-5 w-5 text-violet-500" />
+                      </div>
+                      <h3 className="text-sm font-semibold mb-1">Generating with AI</h3>
+                      <p className="text-xs text-muted-foreground">Crafting your perfect storefront...</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <iframe
-                  srcDoc={MOCK_BAKERY_HTML}
+                  srcDoc={displayHtml}
                   title="Storefront Preview"
                   className="w-full border-0"
                   style={{

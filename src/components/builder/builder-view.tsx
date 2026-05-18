@@ -2,8 +2,10 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { io, Socket } from 'socket.io-client';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 import type {
   ChatMessage,
   BusinessProfile,
@@ -11,6 +13,7 @@ import type {
   GenerationStatus,
   GenerationLog,
   BusinessCategory,
+  Storefront,
 } from '@/lib/types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -369,6 +372,8 @@ function VoiceInputSection() {
     chatMessages,
     businessProfile,
     currentJob,
+    addStorefront,
+    setCurrentStorefront,
   } = useAppStore();
 
   const [textInput, setTextInput] = useState('');
@@ -380,8 +385,12 @@ function VoiceInputSection() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const simTimerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const generationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const logIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const apiResultRef = useRef<string | null>(null);
+  const generationCompletedRef = useRef(false);
+  const { toast: showToast } = useToast();
+  const sessionIdRef = useRef<string>(`builder-${Date.now()}`);
+  const [activeQuickReplies, setActiveQuickReplies] = useState<string[]>([]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -390,12 +399,14 @@ function VoiceInputSection() {
     }
   }, [chatMessages]);
 
-  // Cleanup timers on unmount
+  // Cleanup timers and WebSocket on unmount
   useEffect(() => {
     return () => {
       simTimerRef.current.forEach(clearTimeout);
-      if (generationIntervalRef.current) clearInterval(generationIntervalRef.current);
-      if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+      if (socketRef.current?.connected) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, []);
 
@@ -439,96 +450,149 @@ function VoiceInputSection() {
     simTimerRef.current.push(typeInterval);
   }, []);
 
-  const simulateChat = useCallback(
-    (userText: string) => {
-      // AI response 1: Analysis result
-      simTimerRef.current.push(
-        setTimeout(() => {
-          setChatLoading(true);
-          simTimerRef.current.push(
-            setTimeout(() => {
-              setChatLoading(false);
-              addChatMessage({
-                id: `msg-${Date.now()}`,
-                role: 'assistant',
-                content: MOCK_AI_RESPONSES[0],
-                timestamp: Date.now(),
-              });
+  // Shared helper to call the real /api/chat endpoint
+  const callChatAPI = useCallback(
+    async (message: string): Promise<{
+      response: string;
+      quickReplies: string[];
+      messageCount: number;
+    } | null> => {
+      try {
+        setChatLoading(true);
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            sessionId: sessionIdRef.current,
+          }),
+        });
 
-              // Show business profile after a delay
-              simTimerRef.current.push(
-                setTimeout(() => {
-                  setBusinessProfile(MOCK_BUSINESS_PROFILE);
-                  setSimStage('ready');
-                }, 800)
-              );
+        if (!res.ok) {
+          throw new Error(`API returned ${res.status}`);
+        }
 
-              // AI response 2: Follow-up
-              simTimerRef.current.push(
-                setTimeout(() => {
-                  setChatLoading(true);
-                  simTimerRef.current.push(
-                    setTimeout(() => {
-                      setChatLoading(false);
-                      addChatMessage({
-                        id: `msg-${Date.now()}`,
-                        role: 'assistant',
-                        content: MOCK_AI_RESPONSES[1],
-                        timestamp: Date.now(),
-                      });
-                    }, 1200)
-                  );
-                }, 2000)
-              );
+        const data = await res.json();
 
-              // AI response 3: Maps question
-              simTimerRef.current.push(
-                setTimeout(() => {
-                  setChatLoading(true);
-                  simTimerRef.current.push(
-                    setTimeout(() => {
-                      setChatLoading(false);
-                      addChatMessage({
-                        id: `msg-${Date.now()}`,
-                        role: 'assistant',
-                        content: MOCK_AI_RESPONSES[2],
-                        timestamp: Date.now(),
-                      });
-                    }, 1000)
-                  );
-                }, 5000)
-              );
+        if (data.quickReplies && data.quickReplies.length > 0) {
+          setActiveQuickReplies(data.quickReplies);
+        }
 
-              // AI response 4: Ready to generate
-              simTimerRef.current.push(
-                setTimeout(() => {
-                  setChatLoading(true);
-                  simTimerRef.current.push(
-                    setTimeout(() => {
-                      setChatLoading(false);
-                      addChatMessage({
-                        id: `msg-${Date.now()}`,
-                        role: 'assistant',
-                        content: MOCK_AI_RESPONSES[3],
-                        timestamp: Date.now(),
-                      });
-                    }, 1100)
-                  );
-                }, 8500)
-              );
-            }, 1800)
-          );
-        }, 600)
-      );
+        return data;
+      } catch (error) {
+        console.error('[BuilderChat] API error:', error);
+        showToast({
+          title: 'AI Assistant Error',
+          description: 'Failed to get a response. Please try again.',
+          variant: 'destructive',
+        });
+        addChatMessage({
+          id: `msg-${Date.now()}`,
+          role: 'assistant',
+          content: "I'm sorry, I encountered an error. Please try again.",
+          timestamp: Date.now(),
+        });
+        return null;
+      } finally {
+        setChatLoading(false);
+      }
     },
-    [addChatMessage, setBusinessProfile, setChatLoading]
+    [addChatMessage, setChatLoading, showToast]
   );
 
-  const simulateGeneration = useCallback(() => {
+  const simulateChat = useCallback(
+    async (userText: string) => {
+      // First AI response via real API
+      const result = await callChatAPI(userText);
+      if (!result) return;
+
+      addChatMessage({
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: result.response,
+        timestamp: Date.now(),
+      });
+
+      // Show business profile after a delay
+      simTimerRef.current.push(
+        setTimeout(() => {
+          setBusinessProfile(MOCK_BUSINESS_PROFILE);
+          setSimStage('ready');
+        }, 800)
+      );
+
+      // Send one more automated follow-up after a delay
+      simTimerRef.current.push(
+        setTimeout(async () => {
+          const followUp = await callChatAPI(
+            'Tell me more about what you can help me with for my website.'
+          );
+          if (!followUp) return;
+
+          addChatMessage({
+            id: `msg-${Date.now()}`,
+            role: 'assistant',
+            content: followUp.response,
+            timestamp: Date.now(),
+          });
+        }, 2500)
+      );
+    },
+    [addChatMessage, callChatAPI, setBusinessProfile]
+  );
+
+  // Helper to finalize generation with the generated HTML
+  const finalizeGeneration = useCallback(
+    (generatedHtml: string, storefrontId: string, profile: BusinessProfile) => {
+      const now = new Date().toISOString();
+
+      // Create a new storefront with the generated HTML
+      const newStorefront: Storefront = {
+        id: storefrontId,
+        name: `${profile.name} Website`,
+        businessName: profile.name,
+        category: profile.category,
+        status: 'ready',
+        description: profile.description,
+        url: `/preview/${storefrontId}`,
+        sections: [],
+        html: generatedHtml,
+        businessProfile: profile,
+        createdAt: now,
+        updatedAt: now,
+        publishedAt: null,
+        viewCount: 0,
+        deploymentStatus: 'none',
+        deploymentUrl: null,
+      };
+
+      addStorefront(newStorefront);
+      setCurrentStorefront(newStorefront);
+      updateGenerationStatus('complete', 'Website generated successfully!', 100);
+      setSimStage('complete');
+      generationCompletedRef.current = true;
+
+      showToast({
+        title: 'Website Generated!',
+        description: 'Your storefront is ready for preview.',
+      });
+    },
+    [addStorefront, setCurrentStorefront, updateGenerationStatus, showToast]
+  );
+
+  const handleGenerateWebsite = useCallback(() => {
+    const profileToUse = businessProfile || MOCK_BUSINESS_PROFILE;
+    const storefrontId = `sf-${Date.now()}`;
     const jobId = `job-${Date.now()}`;
+
+    // Reset refs for this generation
+    apiResultRef.current = null;
+    generationCompletedRef.current = false;
+
+    // Create the generation job in the store
     const newJob: GenerationJob = {
       id: jobId,
-      storefrontId: `sf-${Date.now()}`,
+      storefrontId,
       status: 'idle',
       currentStep: 0,
       totalSteps: PIPELINE_STEPS.length,
@@ -537,78 +601,182 @@ function VoiceInputSection() {
       startedAt: new Date().toISOString(),
       completedAt: null,
       voiceTranscript: voiceTranscript,
-      businessProfile: MOCK_BUSINESS_PROFILE,
+      businessProfile: profileToUse,
       logs: [],
     };
     setCurrentJob(newJob);
     setSimStage('generating');
 
-    let stepIndex = 0;
-    let logIndex = 0;
+    // --- Connect to WebSocket for real-time progress ---
+    const socket = io('/?XTransformPort=3002', {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+    });
+    socketRef.current = socket;
 
-    // Start pipeline steps
-    generationIntervalRef.current = setInterval(() => {
-      if (stepIndex < PIPELINE_STEPS.length) {
-        const step = PIPELINE_STEPS[stepIndex];
-        const progress = Math.round(((stepIndex + 1) / PIPELINE_STEPS.length) * 100);
-        updateGenerationStatus(step.id, step.label, progress);
-        stepIndex++;
+    socket.on('connect', () => {
+      console.log('[Builder] WebSocket connected:', socket.id);
+
+      // Emit start_generation to the WebSocket service
+      socket.emit('start_generation', {
+        storefrontId,
+        businessProfile: profileToUse,
+      });
+    });
+
+    socket.on('generation_progress', (data: {
+      storefrontId: string;
+      status: GenerationStatus;
+      message: string;
+      progress: number;
+      agent: string;
+      logs: GenerationLog[];
+    }) => {
+      // Update status and progress in the store
+      updateGenerationStatus(data.status, data.message, data.progress);
+
+      // Add any new logs from the event
+      if (data.logs && data.logs.length > 0) {
+        const currentLogIds = new Set(
+          useAppStore.getState().currentJob?.logs.map(l => l.id) || []
+        );
+        for (const log of data.logs) {
+          if (!currentLogIds.has(log.id)) {
+            addGenerationLog({
+              level: log.level,
+              agent: log.agent,
+              message: log.message,
+              detail: log.detail,
+            });
+          }
+        }
+      }
+    });
+
+    socket.on('generation_complete', (data: {
+      storefrontId: string;
+      success: boolean;
+    }) => {
+      if (data.success) {
+        // If the API already returned HTML, finalize now
+        if (apiResultRef.current && !generationCompletedRef.current) {
+          finalizeGeneration(apiResultRef.current, storefrontId, profileToUse);
+        }
       } else {
-        if (generationIntervalRef.current) clearInterval(generationIntervalRef.current);
-        updateGenerationStatus('complete', 'Website generated successfully!', 100);
+        updateGenerationStatus('error', 'Generation failed on the server', 0);
         setSimStage('complete');
+        showToast({
+          title: 'Generation Failed',
+          description: 'The server reported an error during generation.',
+          variant: 'destructive',
+        });
       }
-    }, 2500);
 
-    // Start logs
-    logIntervalRef.current = setInterval(() => {
-      if (logIndex < MOCK_LOGS.length) {
-        addGenerationLog(MOCK_LOGS[logIndex]);
-        logIndex++;
-      } else {
-        if (logIntervalRef.current) clearInterval(logIntervalRef.current);
+      // Disconnect WebSocket after completion
+      if (socketRef.current?.connected) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
-    }, 800);
-  }, [voiceTranscript, setCurrentJob, updateGenerationStatus, addGenerationLog]);
+    });
 
-  const handleTextSubmit = () => {
+    socket.on('connect_error', (err) => {
+      console.error('[Builder] WebSocket connection error:', err.message);
+      // Don't block — the API call will still proceed
+    });
+
+    // --- In parallel, call the API to generate HTML ---
+    (async () => {
+      try {
+        const res = await fetch('/api/generate/website', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ businessProfile: profileToUse }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`API returned ${res.status}`);
+        }
+
+        const data = await res.json();
+
+        if (data.success && data.html) {
+          apiResultRef.current = data.html;
+
+          // If WebSocket already completed, finalize now
+          if (generationCompletedRef.current) {
+            // Already completed via WebSocket, update the HTML
+            const currentStorefront = useAppStore.getState().currentStorefront;
+            if (currentStorefront) {
+              // Update the existing storefront with the real HTML
+              useAppStore.getState().updateStorefront(currentStorefront.id, {
+                html: data.html,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else if (
+            useAppStore.getState().currentJob?.status === 'complete' ||
+            useAppStore.getState().currentJob?.status === 'idle'
+          ) {
+            // Pipeline already done, finalize immediately
+            finalizeGeneration(data.html, storefrontId, profileToUse);
+          }
+          // Otherwise wait for WebSocket generation_complete event
+        } else {
+          throw new Error('API returned unsuccessful response');
+        }
+      } catch (error) {
+        console.error('[Builder] API generation error:', error);
+        if (!generationCompletedRef.current) {
+          updateGenerationStatus('error', 'Failed to generate website HTML', 0);
+          setSimStage('complete');
+          showToast({
+            title: 'Generation Error',
+            description: error instanceof Error ? error.message : 'Failed to generate the website.',
+            variant: 'destructive',
+          });
+        }
+        // Disconnect WebSocket on error
+        if (socketRef.current?.connected) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+      }
+    })();
+  }, [voiceTranscript, businessProfile, setCurrentJob, updateGenerationStatus, addGenerationLog, finalizeGeneration, showToast]);
+
+  const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
+    const message = textInput.trim();
     addChatMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
-      content: textInput.trim(),
+      content: message,
       timestamp: Date.now(),
     });
     setTextInput('');
     setSimStage('chatting');
 
-    // Simulate AI response
-    simTimerRef.current.push(
+    const result = await callChatAPI(message);
+    if (!result) return;
+
+    addChatMessage({
+      id: `msg-${Date.now()}`,
+      role: 'assistant',
+      content: result.response,
+      timestamp: Date.now(),
+    });
+
+    // Show business profile after enough messages
+    if (result.messageCount >= 2 && !businessProfile) {
       setTimeout(() => {
-        setChatLoading(true);
-        simTimerRef.current.push(
-          setTimeout(() => {
-            setChatLoading(false);
-            addChatMessage({
-              id: `msg-${Date.now()}`,
-              role: 'assistant',
-              content:
-                "Thanks for the details! Let me analyze your business information and ask a few follow-up questions to create the perfect website for you.",
-              timestamp: Date.now(),
-            });
-            simTimerRef.current.push(
-              setTimeout(() => {
-                setBusinessProfile(MOCK_BUSINESS_PROFILE);
-                setSimStage('ready');
-              }, 1000)
-            );
-          }, 1500)
-        );
-      }, 500)
-    );
+        setBusinessProfile(MOCK_BUSINESS_PROFILE);
+        setSimStage('ready');
+      }, 800);
+    }
   };
 
-  const handleQuickReply = (reply: string) => {
+  const handleQuickReply = async (reply: string) => {
     addChatMessage({
       id: `msg-${Date.now()}`,
       role: 'user',
@@ -616,42 +784,35 @@ function VoiceInputSection() {
       timestamp: Date.now(),
     });
 
-    simTimerRef.current.push(
-      setTimeout(() => {
-        setChatLoading(true);
-        simTimerRef.current.push(
-          setTimeout(() => {
-            setChatLoading(false);
-            addChatMessage({
-              id: `msg-${Date.now()}`,
-              role: 'assistant',
-              content:
-                "Got it! I've noted that down. Is there anything else you'd like me to know before I start building your website? You can also click 'Generate Website' whenever you're ready.",
-              timestamp: Date.now(),
-            });
-          }, 1200)
-        );
-      }, 400)
-    );
+    const result = await callChatAPI(reply);
+    if (!result) return;
+
+    addChatMessage({
+      id: `msg-${Date.now()}`,
+      role: 'assistant',
+      content: result.response,
+      timestamp: Date.now(),
+    });
   };
 
   const handleReset = () => {
     simTimerRef.current.forEach(clearTimeout);
-    if (generationIntervalRef.current) clearInterval(generationIntervalRef.current);
-    if (logIntervalRef.current) clearInterval(logIntervalRef.current);
     simTimerRef.current = [];
-    generationIntervalRef.current = null;
-    logIntervalRef.current = null;
+    // Disconnect WebSocket
+    if (socketRef.current?.connected) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    apiResultRef.current = null;
+    generationCompletedRef.current = false;
     clearChat();
     setBusinessProfile(null);
     setCurrentJob(null);
     setVoiceTranscript('');
     setTextInput('');
     setSimStage('idle');
-  };
-
-  const handleGenerateWebsite = () => {
-    simulateGeneration();
+    setActiveQuickReplies([]);
+    sessionIdRef.current = `builder-${Date.now()}`;
   };
 
   const handleViewPreview = () => {
@@ -985,7 +1146,7 @@ function VoiceInputSection() {
                     className="px-4 pb-2"
                   >
                     <div className="flex flex-wrap gap-1.5">
-                      {QUICK_REPLIES.map((reply) => (
+                      {(activeQuickReplies.length > 0 ? activeQuickReplies : QUICK_REPLIES).map((reply) => (
                         <Button
                           key={reply}
                           variant="outline"

@@ -137,3 +137,109 @@ Stage Summary:
 - Agents view accessible via sidebar navigation
 - All 7 views wired: builder, preview, projects, templates, agents, analytics, settings
 - Lint passes with 0 errors, dev server compiles cleanly
+
+---
+Task ID: 3-a
+Agent: Builder Chat API Wiring
+Task: Wire builder chat to use real chat API endpoint
+
+Work Log:
+- Read builder-view.tsx (1,446 lines) and chat API route
+- Added `callChatAPI` helper function for shared API communication
+- Replaced `simulateChat()` with real API calls to `POST /api/chat`
+- Replaced `handleTextSubmit()` with async real API integration
+- Replaced `handleQuickReply()` with async real API integration
+- Added `sessionIdRef` for persistent session tracking
+- Added `activeQuickReplies` state for API-returned quick reply suggestions
+- Added error handling with toast notifications via `useToast`
+- Kept mock voice transcription (`simulateTranscription`) unchanged
+- Kept mock generation pipeline and all UI components unchanged
+
+Stage Summary:
+- Builder chat now uses real LLM API for conversational AI responses
+- Quick replies dynamically populated from API
+- Error handling with user-friendly toast messages
+- Mock voice transcription preserved for demo experience
+
+---
+Task ID: 3-b
+Agent: Generation Pipeline Wiring
+Task: Wire generation pipeline to WebSocket + real website API
+
+Work Log:
+- Installed `socket.io-client@^4.8.3` as a dependency
+- Replaced `simulateGeneration` with real `handleGenerateWebsite` function
+- WebSocket connection via `io("/?XTransformPort=3002")` for real-time progress
+- Emits `start_generation` event, listens for `generation_progress` and `generation_complete`
+- Parallel API call to `POST /api/generate/website` for actual HTML generation
+- Dual-flow coordination: WebSocket progress + API HTML result merge
+- Added `finalizeGeneration` helper to create storefront in store with generated HTML
+- Proper cleanup: WebSocket disconnect on unmount and reset
+- Added success/error toasts for generation feedback
+
+Stage Summary:
+- Generation pipeline now uses real-time WebSocket for progress updates
+- Website HTML generated via real LLM API (`/api/generate/website`)
+- Generated HTML stored in Zustand store and persisted
+- Full end-to-end flow: voice/text → chat → generate → preview
+
+---
+Task ID: 3-c
+Agent: Projects View API Wiring
+Task: Wire projects view to fetch real storefront data from API
+
+Work Log:
+- Added `useEffect` to fetch storefronts from `GET /api/storefronts` on mount
+- Created `mapApiStorefront()` helper for API-to-frontend type mapping
+- Smart merge: real DB data first, mock data as examples below
+- Real delete handler calls `DELETE /api/storefronts?id={id}`
+- Dynamic StatsCards computing from combined data
+- Loading skeleton (TemplateCardSkeleton, FeaturedSkeleton)
+- Error banner with retry button
+- Search/filter works with combined real + mock data
+
+Stage Summary:
+- Projects view fetches real storefronts from database
+- Mock data shown as examples alongside real data
+- CRUD operations (delete) wired to real API
+- Graceful loading/error states
+
+---
+Task ID: 3-d
+Agent: Preview View API Wiring
+Task: Wire preview view to display real generated HTML
+
+Work Log:
+- Added "Generate Website with AI" button in empty state
+- Generation calls `POST /api/generate/website` with business profile
+- Display priority: local generated HTML → store HTML → mock fallback
+- Auto-generation trigger when generation job completes
+- "Regenerate" button in action bar for re-generation
+- Loading overlay with animated border ring during generation
+- "AI-Generated Content" badge when showing AI HTML
+- Dynamic browser chrome URL based on business name
+- Success/error toasts for generation feedback
+
+Stage Summary:
+- Preview view displays real AI-generated website HTML
+- One-click AI generation from empty state
+- Regeneration capability with loading states
+- Seamless flow from builder → preview
+
+---
+Task ID: 3-e
+Agent: Templates View API Wiring
+Task: Wire templates view to use real API
+
+Work Log:
+- Added `useEffect` to fetch from `GET /api/templates` on mount
+- Smart validation: checks that sections match StorefrontSection type
+- Falls back to local mockTemplates on API error
+- Loading skeletons: TemplateCardSkeleton, FeaturedSkeleton
+- Error banner with retry button
+- useMemo dependencies updated to use fetched data
+
+Stage Summary:
+- Templates view fetches real data from API
+- Mock data as fallback when DB is empty
+- Graceful loading/error handling

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
 import type { Template, BusinessCategory } from '@/lib/types';
@@ -39,7 +39,59 @@ import {
 } from 'lucide-react';
 
 // =============================================================================
-// Mock Templates Data
+// Loading Skeleton
+// =============================================================================
+
+function TemplateCardSkeleton() {
+  return (
+    <Card className="overflow-hidden border-border/50 h-full flex flex-col">
+      <div className="h-40 bg-muted animate-pulse" />
+      <CardContent className="p-4 flex-1 flex flex-col gap-3">
+        <div className="h-4 bg-muted rounded animate-pulse w-2/3" />
+        <div className="h-3 bg-muted rounded animate-pulse w-full" />
+        <div className="h-3 bg-muted rounded animate-pulse w-4/5" />
+        <div className="mt-auto pt-3 border-t border-border/50 flex items-center justify-between">
+          <div className="h-3 bg-muted rounded animate-pulse w-16" />
+          <div className="flex gap-2">
+            <div className="h-7 w-16 bg-muted rounded animate-pulse" />
+            <div className="h-7 w-12 bg-muted rounded animate-pulse" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function FeaturedSkeleton() {
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-border/50">
+      <div className="absolute inset-0 bg-muted/20" />
+      <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+        <div className="shrink-0 w-32 h-24 sm:w-48 sm:h-36 rounded-xl bg-muted animate-pulse" />
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex gap-2">
+            <div className="h-5 w-16 bg-muted rounded-full animate-pulse" />
+            <div className="h-5 w-20 bg-muted rounded-full animate-pulse" />
+          </div>
+          <div className="h-6 bg-muted rounded animate-pulse w-48" />
+          <div className="h-4 bg-muted rounded animate-pulse w-full" />
+          <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+          <div className="flex gap-4">
+            <div className="h-4 bg-muted rounded animate-pulse w-24" />
+            <div className="h-4 bg-muted rounded animate-pulse w-20" />
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <div className="h-9 w-24 bg-muted rounded animate-pulse" />
+          <div className="h-9 w-28 bg-muted rounded animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// Mock Templates Data (fallback)
 // =============================================================================
 
 const mockTemplates: Template[] = [
@@ -267,13 +319,107 @@ export function TemplatesView() {
   const [activeCategory, setActiveCategory] = useState<BusinessCategory | 'all'>('all');
   const [sortOption, setSortOption] = useState<SortOption>('popular');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch templates from API on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTemplates() {
+      try {
+        const res = await fetch('/api/templates');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (cancelled) return;
+
+        const raw = data.templates as unknown[];
+        if (!Array.isArray(raw) || raw.length === 0) {
+          // API returned empty – use local mock
+          setTemplates(mockTemplates);
+          return;
+        }
+
+        // Validate that sections are StorefrontSection objects (not strings)
+        const valid = raw.every(
+          (t) =>
+            t &&
+            typeof t === 'object' &&
+            Array.isArray(t.sections) &&
+            t.sections.length > 0 &&
+            typeof t.sections[0] === 'object' &&
+            'type' in t.sections[0]
+        );
+
+        if (valid) {
+          setTemplates(raw as Template[]);
+        } else {
+          // API mock data has sections as strings – fall back to local mocks
+          setTemplates(mockTemplates);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[TemplatesView] fetch failed:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load templates');
+        setTemplates(mockTemplates);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchTemplates();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRetry = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    setTemplates([]);
+    // Trigger a refetch by leveraging a state toggle trick
+    fetch('/api/templates')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        const raw = data.templates as unknown[];
+        if (Array.isArray(raw) && raw.length > 0) {
+          const valid = raw.every(
+            (t) =>
+              t &&
+              typeof t === 'object' &&
+              Array.isArray(t.sections) &&
+              t.sections.length > 0 &&
+              typeof t.sections[0] === 'object' &&
+              'type' in t.sections[0]
+          );
+          if (valid) {
+            setTemplates(raw as Template[]);
+            setError(null);
+          } else {
+            setTemplates(mockTemplates);
+          }
+        } else {
+          setTemplates(mockTemplates);
+        }
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to load templates');
+        setTemplates(mockTemplates);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   // Featured template
-  const featuredTemplate = mockTemplates.find((t) => t.featured) || mockTemplates[0];
+  const featuredTemplate = templates.find((t) => t.featured) || templates[0];
 
   // Filter & sort
   const filteredTemplates = useMemo(() => {
-    let result = mockTemplates.filter((t) => t.id !== featuredTemplate.id);
+    let result = templates.filter((t) => t.id !== featuredTemplate?.id);
 
     if (activeCategory !== 'all') {
       result = result.filter((t) => t.category === activeCategory);
@@ -302,7 +448,7 @@ export function TemplatesView() {
     }
 
     return result;
-  }, [searchQuery, activeCategory, sortOption, featuredTemplate.id]);
+  }, [searchQuery, activeCategory, sortOption, templates, featuredTemplate?.id]);
 
   const handleUseTemplate = (template: Template) => {
     setSelectedTemplate(null);
@@ -322,6 +468,20 @@ export function TemplatesView() {
           Browse our curated collection of business-specific website templates
         </p>
       </motion.div>
+
+      {/* Error Banner */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          <span>Could not load from server — showing local templates.</span>
+          <Button variant="outline" size="sm" onClick={handleRetry} className="shrink-0 border-destructive/30 hover:bg-destructive/10">
+            Retry
+          </Button>
+        </motion.div>
+      )}
 
       {/* Search & Filter Bar */}
       <motion.div
@@ -371,7 +531,10 @@ export function TemplatesView() {
         </div>
       </motion.div>
 
-      {/* Featured Template */}
+      {/* Featured Template / Skeleton */}
+      {loading ? (
+        <FeaturedSkeleton />
+      ) : featuredTemplate ? (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -444,8 +607,16 @@ export function TemplatesView() {
           </div>
         </div>
       </motion.div>
+      ) : null}
 
-      {/* Template Grid */}
+      {/* Template Grid / Skeletons */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <TemplateCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : (
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -529,9 +700,10 @@ export function TemplatesView() {
           ))}
         </AnimatePresence>
       </motion.div>
+      )}
 
       {/* Empty State */}
-      {filteredTemplates.length === 0 && (
+      {!loading && filteredTemplates.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
