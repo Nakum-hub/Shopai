@@ -260,6 +260,12 @@ function VoiceInputSection() {
     currentJob,
     addStorefront,
     setCurrentStorefront,
+    selectedTemplate,
+    setSelectedTemplate,
+    selectedDesignComponent,
+    setSelectedDesignComponent,
+    selectedDesignTheme,
+    setSelectedDesignTheme,
   } = useAppStore();
 
   const [textInput, setTextInput] = useState('');
@@ -292,6 +298,72 @@ function VoiceInputSection() {
       setIsMicSupported(false);
     }
   }, []);
+
+  // --- Handle incoming selection from Templates / Design Library ---
+  useEffect(() => {
+    // When a template is selected from the Templates view
+    if (selectedTemplate) {
+      // Build a business profile from the template's data
+      const profile: BusinessProfile = {
+        name: selectedTemplate.name,
+        category: selectedTemplate.category,
+        description: selectedTemplate.description,
+        location: '',
+        phone: '',
+        email: '',
+        hours: '',
+        products: [],
+        services: [],
+        style: {
+          primaryColor: selectedTemplate.style.primaryColor,
+          secondaryColor: selectedTemplate.style.secondaryColor,
+          fontFamily: selectedTemplate.style.fontFamily,
+          theme: selectedTemplate.style.theme === 'elegant' ? 'elegant' : selectedTemplate.style.theme === 'classic' ? 'classic' : selectedTemplate.style.theme === 'minimal' ? 'minimal' : selectedTemplate.style.theme === 'bold' ? 'bold' : 'modern',
+          mood: selectedTemplate.style.mood,
+        },
+        features: selectedTemplate.sections.map(s => s.type),
+      };
+      setBusinessProfile(profile);
+      addChatMessage({
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `Great choice! I've loaded the **${selectedTemplate.name}** template. It's a ${selectedTemplate.category} template with ${selectedTemplate.sections.length} sections (${selectedTemplate.sections.map(s => s.type).join(', ')}). The style uses ${selectedTemplate.style.fontFamily} font with ${selectedTemplate.style.theme} theme. You can now customize it by describing your business details, or click "Generate Website" to create your site with this template.`,
+        timestamp: Date.now(),
+      });
+      setSimStage('ready');
+      setSelectedTemplate(null); // consume
+    }
+  }, [selectedTemplate]);
+
+  useEffect(() => {
+    // When a design component is selected from the Design Library
+    if (selectedDesignComponent) {
+      addChatMessage({
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `I've added the **${selectedDesignComponent.name}** component (${selectedDesignComponent.category}) to your project. This ${selectedDesignComponent.style}-style component will be included when generating your website. Describe your business and I'll build your site with this component included!`,
+        timestamp: Date.now(),
+      });
+      setSimStage('chatting');
+      setShowTextInput(true);
+      setSelectedDesignComponent(null); // consume
+    }
+  }, [selectedDesignComponent]);
+
+  useEffect(() => {
+    // When a design theme is selected from the Design Library
+    if (selectedDesignTheme) {
+      addChatMessage({
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `The **${selectedDesignTheme.name}** theme has been applied! It features ${selectedDesignTheme.mood.toLowerCase()} mood with ${selectedDesignTheme.fontFamily} font and a ${selectedDesignTheme.style} style. Colors: primary **${selectedDesignTheme.colors.primary}**, secondary **${selectedDesignTheme.colors.secondary}**. Describe your business to generate a website with this theme.`,
+        timestamp: Date.now(),
+      });
+      setSimStage('chatting');
+      setShowTextInput(true);
+      setSelectedDesignTheme(null); // consume
+    }
+  }, [selectedDesignTheme]);
 
   // Auto-scroll chat
   useEffect(() => {
