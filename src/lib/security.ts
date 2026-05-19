@@ -231,3 +231,240 @@ export function sanitizePhone(phone: string): string {
   const cleaned = sanitizeString(phone, 30);
   return cleaned.replace(/[^0-9+\-() .]/g, '');
 }
+
+// -----------------------------------------------------------------------------
+// Prompt Injection Protection
+// -----------------------------------------------------------------------------
+
+/**
+ * Patterns commonly used in prompt injection attacks against LLM integrations.
+ * These are checked in user-facing text inputs that will be sent to the AI.
+ */
+const PROMPT_INJECTION_PATTERNS = [
+  // Direct override attempts
+  /\bignore\s+(previous|all|above|everything)\b/gi,
+  /\bforget\s+(everything|all|previous|your instructions)\b/gi,
+  /\bnew\s+instructions?\b/gi,
+  /\bdisregard\s+(previous|all|above|your)\b/gi,
+  /\byou\s+are\s+now\b/gi,
+  /\bpretend\s+(you\s+are|to\s+be|that)\b/gi,
+  /\bact\s+as\s+(if|a|an)\b/gi,
+  /\broleplay\s+as\b/gi,
+  /\bfrom\s+now\s+on\b/gi,
+  /\bsystem\s*:\s*/gi,
+
+  // Context extraction
+  /\breveal\s+(your|the|hidden|secret)\b/gi,
+  /\bshow\s+(me\s+)?your\b/gi,
+  /\bwhat\s+(are\s+)?your\s+(instructions?|rules?|prompts?|system)\b/gi,
+  /\bprint\s+(your|the|all)\b/gi,
+  /\boutput\s+(your|the|all)\b/gi,
+  /\bdump\s+(your|the|all)\b/gi,
+
+  // Instruction manipulation
+  /\btranslate\s+(this|the|your|following)\b/gi,
+  /\brepeat\s+(this|the|your|following)\b/gi,
+  /\bconvert\s+(this|the|your)\b/gi,
+  /\bsummarize\s+(this|the|your)\b/gi,
+
+  // Delimiter injection
+  /```[^`]*system[^`]*```/gi,
+  /<\|im_start\|>/gi,
+  /<\|im_end\|>/gi,
+  /\[INST\]/gi,
+  /\[\/INST\]/gi,
+
+  // Encoding tricks
+  /base64/gi,
+  /unicode\s+escape/gi,
+  /html\s*entity/gi,
+
+  // Chain-of-thought manipulation
+  /\bthink\s+step\s+by\s+step\b/gi,
+  /\bchain\s+of\s+thought\b/gi,
+];
+
+/**
+ * Score a text input for prompt injection risk.
+ * Returns a risk score from 0 (safe) to 1 (very likely injection).
+ */
+export function calculatePromptInjectionRisk(text: string): number {
+  if (!text || typeof text !== 'string') return 0;
+
+  let matches = 0;
+  for (const pattern of PROMPT_INJECTION_PATTERNS) {
+    if (pattern.test(text)) {
+      matches++;
+    }
+  }
+
+  // Normalize: 3+ matches = high risk
+  if (matches >= 3) return 1.0;
+  if (matches === 2) return 0.7;
+  if (matches === 1) return 0.3;
+  return 0;
+}
+
+/**
+ * Sanitize text before sending to LLM to reduce prompt injection risk.
+ * Strips known injection patterns while preserving legitimate business content.
+ */
+export function sanitizeForLLM(text: string): string {
+  if (!text || typeof text !== 'string') return text;
+
+  let sanitized = text;
+
+  // Remove instruction override attempts
+  sanitized = sanitized.replace(/\bignore\s+(previous|all|above|everything)\b[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\bforget\s+(everything|all|previous|your instructions)\b[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\bnew\s+instructions?\s*[::].*/gi, '');
+  sanitized = sanitized.replace(/\bdisregard\s+(previous|all|above|your)\b[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\byou\s+are\s+now\s+\w+[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\bpretend\s+(you\s+are|to\s+be|that)\s+\w+[^.!?]*/gi, '');
+
+  // Remove system prompt extraction attempts
+  sanitized = sanitized.replace(/\breveal\s+(your|the|hidden|secret)\s+\w+[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\bshow\s+(me\s+)?your\s+\w+[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\bprint\s+(your|the|all)\s*\w*[^.!?]*/gi, '');
+  sanitized = sanitized.replace(/\boutput\s+(your|the|all)\s*\w*[^.!?]*/gi, '');
+
+  // Remove delimiter injection
+  sanitized = sanitized.replace(/```[^`]*system[^`]*```/g, '');
+  sanitized = sanitized.replace(/<\|im_start\|>[\s\S]*?<\|im_end\|>/g, '');
+  sanitized = sanitized.replace(/\[INST\][\s\S]*?\[\/INST\]/g, '');
+
+  // Remove repetitive commands that might be injection chains
+  sanitized = sanitized.replace(/(?:ignore|forget|disregard|reveal|show|print|output)(?:\s+\w+){3,}/gi, '');
+
+  return sanitized.trim();
+}
+
+/**
+ * Validate that user input is safe for LLM processing.
+ * Returns { safe, risk, sanitized } object.
+ */
+export function validateForLLM(text: string): {
+  safe: boolean;
+  risk: number;
+  sanitized: string;
+  warnings: string[];
+} {
+  const risk = calculatePromptInjectionRisk(text);
+  const sanitized = sanitizeForLLM(text);
+  const warnings: string[] = [];
+
+  if (risk >= 1.0) {
+    warnings.push('Input contains strong indicators of prompt injection attempt');
+  } else if (risk >= 0.7) {
+    warnings.push('Input may contain prompt injection patterns — sanitized for safety');
+  } else if (risk >= 0.3) {
+    warnings.push('Minor injection risk detected — text was cleaned');
+  }
+
+  return {
+    safe: risk < 0.7,
+    risk,
+    sanitized,
+    warnings,
+  };
+}
+
+// -----------------------------------------------------------------------------
+// SSRF Protection
+// -----------------------------------------------------------------------------
+
+/**
+ * URL patterns that should be blocked to prevent Server-Side Request Forgery.
+ */
+const SSRF_BLOCKED_PATTERNS = [
+  // Private / internal network ranges
+  /^https?:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,
+  /^https?:\/\/(172\.(1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}/i,
+  /^https?:\/\/(192\.168)\.\d{1,3}\.\d{1,3}/i,
+  /^https?:\/\/(127\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,
+  /^https?:\/\/(0)\.\d{1,3}\.\d{1,3}\.\d{1,3}/i,
+  /^https?:\/\/localhost/i,
+  /^https?:\/\/\[::1\]/i,
+  /^https?:\/\/\[?fe80/i,
+  /^https?:\/\/\[?fc00/i,
+
+  // Metadata endpoints
+  /^https?:\/\/169\.254\.\d{1,3}\.\d{1,3}/i,
+  /^https?:\/\/metadata\.google\.internal/i,
+  /^https?:\/\/metadata\.google\.com/i,
+
+  // Cloud provider metadata
+  /^https?:\/\/100\.100\.100\.200/i,
+  /^https?:\/\/instance-data/i,
+
+  // Common service discovery
+  /^https?:\/\/consul/i,
+  /^https?:\/\/etcd/i,
+  /^https?:\/\/zookeeper/i,
+  /^https?:\/\/kubernetes\.default/i,
+
+  // DNS rebinding risk
+  /^https?:\/\/[a-z0-9]+\.local/i,
+  /^https?:\/\/.*\.internal/i,
+  /^https?:\/\/.*\.corp/i,
+  /^https?:\/\/.*\.private/i,
+];
+
+/**
+ * Check if a URL is safe from SSRF attacks.
+ * Returns { safe, reason } where reason is null if safe.
+ */
+export function checkSSRFSafety(url: string): { safe: boolean; reason: string | null } {
+  if (!url || typeof url !== 'string') {
+    return { safe: false, reason: 'Empty URL' };
+  }
+
+  // Must be http or https
+  if (!/^https?:\/\//i.test(url)) {
+    return { safe: false, reason: 'Only HTTP/HTTPS URLs are allowed' };
+  }
+
+  for (const pattern of SSRF_BLOCKED_PATTERNS) {
+    if (pattern.test(url)) {
+      return { safe: false, reason: `URL matches SSRF blocklist pattern: ${pattern.source}` };
+    }
+  }
+
+  // Block non-standard ports (except common web ports)
+  const urlObj = new URL(url);
+  const port = urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80);
+  const allowedPorts = [80, 443, 8080, 8443, 3000, 3001];
+  if (!allowedPorts.includes(parseInt(port, 10))) {
+    return { safe: false, reason: `Port ${port} is not in the allowed list` };
+  }
+
+  // Block file:// and data:// protocols
+  if (/^(file|data|ftp|sftp|ssh|telnet|gopher|dict|ldap|ldaps):/i.test(url)) {
+    return { safe: false, reason: `Protocol not allowed: ${url.split(':')[0]}` };
+  }
+
+  return { safe: true, reason: null };
+}
+
+/**
+ * Validate and sanitize a list of URLs (e.g., from user input or generated content).
+ * Returns array of safe URLs and array of blocked reasons.
+ */
+export function validateUrls(urls: string[]): {
+  safeUrls: string[];
+  blocked: Array<{ url: string; reason: string }>;
+} {
+  const safeUrls: string[] = [];
+  const blocked: Array<{ url: string; reason: string }> = [];
+
+  for (const url of urls) {
+    const result = checkSSRFSafety(url);
+    if (result.safe) {
+      safeUrls.push(url);
+    } else {
+      blocked.push({ url, reason: result.reason || 'Unknown' });
+    }
+  }
+
+  return { safeUrls, blocked };
+}

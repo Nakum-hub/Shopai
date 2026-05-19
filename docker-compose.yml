@@ -1,0 +1,97 @@
+# =============================================================================
+# StoreCraft AI - Docker Compose Configuration
+# =============================================================================
+# Usage: docker-compose up --build
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Main Application (Next.js)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: storecraft-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/storecraft.db
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-changeme-in-production}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+    depends_on:
+      generation-service:
+        condition: service_healthy
+    networks:
+      - storecraft-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Generation Service (WebSocket Pipeline Orchestrator)
+  # ---------------------------------------------------------------------------
+  generation-service:
+    build:
+      context: ./mini-services/generation-service
+      dockerfile: Dockerfile
+    container_name: storecraft-generation
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+    networks:
+      - storecraft-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Nginx Reverse Proxy (Production)
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: storecraft-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app
+    networks:
+      - storecraft-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  app-data:
+    driver: local
+  app-logs:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  storecraft-network:
+    driver: bridge
