@@ -52,3 +52,21 @@ Stage Summary:
 - Each template has its own unique, creative preview image
 - Categories covered: Bakery(6), Restaurant(6), Clothing(5), Electronics(5), Salon(5), Grocery(5), Hardware(5), Medical(5), Boutique(5), Service(5), Other(8)
 - All references updated to .jpg extension
+---
+Task ID: 2
+Agent: Main
+Task: Fix template images with non-English text
+
+Work Log:
+- Used VLM to scan all 61 template images for non-English text
+- Found 10 images with Chinese/non-English text: thread-needle, vetcare-clinic, childcare-center, cleanpro-services, daily-bread-coop, eyecare-optometry, legal-associates, medical-care, service-pro, spice-market
+- Regenerated all 10 with explicit "ALL TEXT IN ENGLISH ONLY" and "no Chinese characters" in prompts
+- medical-care required 2 attempts (still had non-English on first retry), fixed with "NO TEXT AT ALL" approach
+- Verified all 10 regenerated images pass VLM non-English text check
+- All 61 images now confirmed English-only
+- Lint passes with 0 errors
+
+Stage Summary:
+- 10 images regenerated with English-only text enforcement
+- All 61 template images verified clean via VLM
+- No non-English text remaining in any template image
