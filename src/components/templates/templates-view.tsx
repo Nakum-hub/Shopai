@@ -315,7 +315,7 @@ const itemVariants = {
 // =============================================================================
 
 export function TemplatesView() {
-  const { setCurrentView } = useAppStore();
+  const { setCurrentView, setSelectedTemplate: setStoreTemplate } = useAppStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<BusinessCategory | 'all'>('all');
   const [sortOption, setSortOption] = useState<SortOption>('popular');
@@ -453,6 +453,8 @@ export function TemplatesView() {
 
   const handleUseTemplate = (template: Template) => {
     setSelectedTemplate(null);
+    // Store the selected template so the builder can use its data
+    setStoreTemplate(template);
     setCurrentView('builder');
   };
 

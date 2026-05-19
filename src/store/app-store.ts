@@ -13,6 +13,8 @@ import type {
   PlatformSettings,
   BrandStyle,
   BusinessCategory,
+  DesignComponent,
+  DesignTheme,
 } from '@/lib/types';
 
 // =============================================================================
@@ -79,6 +81,14 @@ interface AppState {
   setIsRecording: (recording: boolean) => void;
   voiceTranscript: string;
   setVoiceTranscript: (transcript: string) => void;
+
+  // Template / Design Library selection (data flows to builder)
+  selectedTemplate: Template | null;
+  setSelectedTemplate: (template: Template | null) => void;
+  selectedDesignComponent: DesignComponent | null;
+  setSelectedDesignComponent: (component: DesignComponent | null) => void;
+  selectedDesignTheme: DesignTheme | null;
+  setSelectedDesignTheme: (theme: DesignTheme | null) => void;
 }
 
 // =============================================================================
@@ -244,4 +254,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIsRecording: (recording) => set({ isRecording: recording }),
   voiceTranscript: '',
   setVoiceTranscript: (transcript) => set({ voiceTranscript: transcript }),
+
+  // Template / Design Library selection
+  selectedTemplate: null,
+  setSelectedTemplate: (template) => set({ selectedTemplate: template }),
+  selectedDesignComponent: null,
+  setSelectedDesignComponent: (component) => set({ selectedDesignComponent: component }),
+  selectedDesignTheme: null,
+  setSelectedDesignTheme: (theme) => set({ selectedDesignTheme: theme }),
 }));
