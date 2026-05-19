@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
 import type { Template, BusinessCategory } from '@/lib/types';
@@ -101,7 +102,7 @@ const mockTemplates: Template[] = [
     description:
       'A warm, inviting template perfect for artisan bakeries, pastry shops, and cafes. Features golden gradients and cozy aesthetics that make your baked goods shine online.',
     category: 'bakery',
-    preview: 'from-amber-500 via-orange-400 to-yellow-300',
+    preview: '/templates/bakery-delight.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Welcome', content: 'Hero banner with bakery image', order: 0, visible: true, config: {} },
       { id: 's2', type: 'about', title: 'Our Story', content: 'About the bakery', order: 1, visible: true, config: {} },
@@ -120,7 +121,7 @@ const mockTemplates: Template[] = [
     description:
       'A dark, luxurious template designed for fine dining restaurants, bistros, and upscale eateries. Rich typography and moody visuals create an unforgettable dining experience.',
     category: 'restaurant',
-    preview: 'from-stone-900 via-stone-800 to-amber-900',
+    preview: '/templates/restaurant-elegance.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Welcome', content: 'Restaurant hero', order: 0, visible: true, config: {} },
       { id: 's2', type: 'about', title: 'Our Philosophy', content: 'About us', order: 1, visible: true, config: {} },
@@ -140,7 +141,7 @@ const mockTemplates: Template[] = [
     description:
       'A modern, minimal template for clothing brands, boutiques, and fashion retailers. Clean lines and sophisticated layouts let your collection speak for itself.',
     category: 'clothing',
-    preview: 'from-neutral-200 via-neutral-100 to-white',
+    preview: '/templates/fashion-forward.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Collection', content: 'Hero banner', order: 0, visible: true, config: {} },
       { id: 's2', type: 'products', title: 'Shop', content: 'Product grid', order: 1, visible: true, config: {} },
@@ -159,7 +160,7 @@ const mockTemplates: Template[] = [
     description:
       'A sleek, dark template for electronics stores, gadget shops, and tech retailers. High-contrast design with modern grid layouts perfect for showcasing products.',
     category: 'electronics',
-    preview: 'from-slate-900 via-gray-800 to-slate-700',
+    preview: '/templates/tech-store-pro.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Latest Tech', content: 'Hero banner', order: 0, visible: true, config: {} },
       { id: 's2', type: 'products', title: 'Products', content: 'Tech products', order: 1, visible: true, config: {} },
@@ -178,7 +179,7 @@ const mockTemplates: Template[] = [
     description:
       'A soft, feminine template for beauty salons, spas, and wellness centers. Delicate pink accents and graceful typography create a serene online presence.',
     category: 'salon',
-    preview: 'from-pink-300 via-rose-200 to-pink-100',
+    preview: '/templates/beauty-salon.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Welcome', content: 'Salon hero', order: 0, visible: true, config: {} },
       { id: 's2', type: 'services', title: 'Services', content: 'Treatment menu', order: 1, visible: true, config: {} },
@@ -198,7 +199,7 @@ const mockTemplates: Template[] = [
     description:
       'A clean, professional template for medical clinics, dental offices, and healthcare providers. Trust-inspiring design with intuitive navigation for patients.',
     category: 'medical',
-    preview: 'from-emerald-600 via-teal-500 to-cyan-400',
+    preview: '/templates/medical-care.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Welcome', content: 'Medical hero', order: 0, visible: true, config: {} },
       { id: 's2', type: 'about', title: 'About Us', content: 'Practice info', order: 1, visible: true, config: {} },
@@ -218,7 +219,7 @@ const mockTemplates: Template[] = [
     description:
       'An industrial-strength template for hardware stores, tool shops, and DIY suppliers. Bold, practical design that reflects reliability and craftsmanship.',
     category: 'hardware',
-    preview: 'from-orange-700 via-amber-600 to-yellow-500',
+    preview: '/templates/hardware-hub.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Tools & More', content: 'Hardware hero', order: 0, visible: true, config: {} },
       { id: 's2', type: 'products', title: 'Products', content: 'Product catalog', order: 1, visible: true, config: {} },
@@ -237,7 +238,7 @@ const mockTemplates: Template[] = [
     description:
       'A professional template for service businesses, consultants, and agencies. Polished design with clear calls-to-action that convert visitors into clients.',
     category: 'service',
-    preview: 'from-slate-600 via-blue-gray-500 to-gray-400',
+    preview: '/templates/service-pro.png',
     sections: [
       { id: 's1', type: 'hero', title: 'Expert Services', content: 'Service hero', order: 0, visible: true, config: {} },
       { id: 's2', type: 'about', title: 'About', content: 'Company info', order: 1, visible: true, config: {} },
@@ -541,21 +542,18 @@ export function TemplatesView() {
         transition={{ duration: 0.5, delay: 0.15 }}
       >
         <div className="relative overflow-hidden rounded-xl border border-border/50">
-          <div
-            className={cn(
-              'absolute inset-0 bg-gradient-to-br opacity-20',
-              featuredTemplate.preview
-            )}
-          />
           <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-            {/* Preview Swatch */}
+            {/* Preview Image */}
             <div className="shrink-0">
-              <div
-                className={cn(
-                  'w-32 h-24 sm:w-48 sm:h-36 rounded-xl bg-gradient-to-br shadow-lg',
-                  featuredTemplate.preview
-                )}
-              />
+              <div className="w-32 h-24 sm:w-48 sm:h-36 rounded-xl overflow-hidden shadow-lg">
+                <Image
+                  src={featuredTemplate.preview}
+                  alt={`${featuredTemplate.name} template preview`}
+                  width={192}
+                  height={144}
+                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                />
+              </div>
             </div>
 
             {/* Info */}
@@ -636,12 +634,14 @@ export function TemplatesView() {
                 onClick={() => setSelectedTemplate(template)}
               >
                 {/* Preview */}
-                <div
-                  className={cn(
-                    'relative h-40 bg-gradient-to-br transition-transform duration-500 group-hover:scale-105',
-                    template.preview
-                  )}
-                >
+                <div className="relative h-48 overflow-hidden">
+                  <Image
+                    src={template.preview}
+                    alt={`${template.name} template preview`}
+                    width={400}
+                    height={300}
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300" />
                   {template.popular && (
                     <Badge className="absolute top-3 right-3 bg-amber-500/90 text-white border-0 text-[10px]">
@@ -723,13 +723,15 @@ export function TemplatesView() {
           {selectedTemplate && (
             <>
               {/* Large Preview */}
-              <div
-                className={cn(
-                  'h-48 sm:h-64 rounded-xl bg-gradient-to-br relative overflow-hidden -mx-6 -mt-6 mb-4',
-                  selectedTemplate.preview
-                )}
-              >
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              <div className="h-56 sm:h-72 rounded-xl relative overflow-hidden -mx-6 -mt-6 mb-4">
+                <Image
+                  src={selectedTemplate.preview}
+                  alt={`${selectedTemplate.name} template preview`}
+                  width={800}
+                  height={400}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 <div className="absolute bottom-4 left-6 right-6">
                   <div className="flex items-center gap-2 mb-1">
                     {selectedTemplate.featured && (

@@ -784,3 +784,35 @@ Stage Summary:
 - ESLint: 0 errors
 - Dev server: stable compilation
 - Generation service: starts successfully on port 3002
+
+---
+Task ID: 2-image-templates
+Agent: Main Orchestrator
+Task: Add real AI-generated template preview images to replace CSS gradients
+
+Work Log:
+- Generated 8 professional template preview images using z-ai image generation CLI
+  - bakery-delight.png: Warm golden artisan bakery website mockup
+  - restaurant-elegance.png: Dark luxurious fine dining website mockup
+  - fashion-forward.png: Minimalist black & white fashion boutique mockup
+  - tech-store-pro.png: Sleek dark cyan electronics store mockup
+  - beauty-salon.png: Soft pink rose spa and wellness center mockup
+  - medical-care.png: Clean teal medical clinic website mockup
+  - hardware-hub.png: Bold orange industrial hardware store mockup
+  - service-pro.png: Professional slate gray consulting agency mockup
+- All images saved to /public/templates/ directory (1344x768 landscape)
+- Updated templates-view.tsx: replaced CSS gradient rendering with Next.js <Image> components
+  - Featured template section: rounded image with hover zoom effect
+  - Grid card previews: h-48 overflow-hidden images with scale-on-hover
+  - Detail dialog: h-56/h-72 hero image with gradient overlay for text
+- Updated /api/templates/route.ts: 
+  - Replaced all mock data with proper section objects (not strings)
+  - Updated all preview URLs from CSS gradients to /templates/*.png image paths
+  - Added CATEGORY_IMAGE_MAP for backward compatibility with old DB gradient strings
+  - Added resolvePreviewUrl() to auto-detect gradients and map to real images
+
+Stage Summary:
+- 8 AI-generated professional template preview images created
+- All template previews now show real website mockup images instead of colored gradients
+- Backward compatible: old DB entries with gradient strings are auto-mapped to images
+- ESLint passes with 0 errors, dev server compiles successfully
