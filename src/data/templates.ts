@@ -30,7 +30,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-bakery-1', name: 'Golden Crust Bakery', description: 'A warm, inviting template with golden gradients and cozy aesthetics for artisan bakeries and pastry shops.',
-    category: 'bakery', preview: '/templates/bakery-delight.png',
+    category: 'bakery', preview: '/templates/golden-crust-bakery.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Welcome', content: 'Artisan breads & pastries baked fresh daily' },
       { type: 'about', title: 'Our Story', content: 'Three generations of baking tradition since 1985' },
@@ -44,7 +44,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-bakery-2', name: 'French Patisserie', description: 'An elegant Parisian-inspired design with soft pastels and refined typography for high-end pastry shops.',
-    category: 'bakery', preview: '/templates/bakery-delight.png',
+    category: 'bakery', preview: '/templates/french-patisserie.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Bienvenue', content: 'Authentic French pastries in the heart of the city' },
       { type: 'about', title: 'Our Artisans', content: 'Trained in Paris, crafting perfection since 2010' },
@@ -58,7 +58,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-bakery-3', name: 'Rustic Oven', description: 'A farmhouse-chic template with earthy tones and textured backgrounds for rustic bread bakeries.',
-    category: 'bakery', preview: '/templates/bakery-delight.png',
+    category: 'bakery', preview: '/templates/rustic-oven.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Fresh From The Oven', content: 'Wood-fired breads made with locally sourced ingredients' },
       { type: 'about', title: 'Our Farm', content: 'We grow our own wheat and mill it fresh' },
@@ -71,7 +71,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-bakery-4', name: 'Cake Studio', description: 'A modern, colorful template for custom cake shops and dessert studios with bold visual galleries.',
-    category: 'bakery', preview: '/templates/bakery-delight.png',
+    category: 'bakery', preview: '/templates/cake-studio.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Custom Cakes', content: 'Instagram-worthy cakes for every celebration' },
       { type: 'about', title: 'Our Designer', content: 'Award-winning cake artist with 10+ years experience' },
@@ -85,7 +85,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-bakery-5', name: 'Daily Bread Co-op', description: 'A community-focused template with clean layout for cooperative bakeries and community-driven shops.',
-    category: 'bakery', preview: '/templates/bakery-delight.png',
+    category: 'bakery', preview: '/templates/daily-bread-coop.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Baked Together', content: 'Community-owned bakery serving our neighborhood since 1998' },
       { type: 'about', title: 'Our Mission', content: 'Affordable, healthy bread for everyone' },
@@ -98,7 +98,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-bakery-6', name: 'Donut Paradise', description: 'A fun, vibrant template for donut shops and sweet treat stores with playful animations and bright colors.',
-    category: 'bakery', preview: '/templates/bakery-delight.png',
+    category: 'bakery', preview: '/templates/donut-paradise.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Life Is Short', content: 'Eat the donut. 50+ flavors made fresh every morning.' },
       { type: 'products', title: 'Flavors', content: 'Classic glazed, chocolate sprinkle, matcha, maple bacon, and more' },
@@ -116,7 +116,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-restaurant-1', name: 'Restaurant Elegance', description: 'A dark, luxurious template for fine dining restaurants with rich typography and moody visuals.',
-    category: 'restaurant', preview: '/templates/restaurant-elegance.png',
+    category: 'restaurant', preview: '/templates/restaurant-elegance.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Welcome', content: 'An unforgettable dining experience awaits' },
       { type: 'about', title: 'Our Philosophy', content: 'Farm-to-table cuisine with seasonal menus' },
@@ -130,7 +130,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-restaurant-2', name: 'Sakura Sushi Bar', description: 'A sleek Japanese-inspired template with clean lines and subtle animations for sushi restaurants.',
-    category: 'restaurant', preview: '/templates/restaurant-elegance.png',
+    category: 'restaurant', preview: '/templates/sakura-sushi-bar.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Omakase', content: 'Chef\'s choice sushi experience' },
       { type: 'about', title: 'Our Chef', content: 'Trained in Tokyo with 20 years of experience' },
@@ -144,7 +144,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-restaurant-3', name: 'Trattoria Bella', description: 'A warm Italian-themed template with terracotta colors and rustic charm for trattorias and pizzerias.',
-    category: 'restaurant', preview: '/templates/restaurant-elegance.png',
+    category: 'restaurant', preview: '/templates/trattoria-bella.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Benvenuti', content: 'Authentic Italian cuisine made with love' },
       { type: 'about', title: 'Nonna\'s Kitchen', content: 'Recipes passed down through generations' },
@@ -158,7 +158,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-restaurant-4', name: 'Street Food Hub', description: 'A vibrant, energetic template for food trucks, street food vendors, and casual dining.',
-    category: 'restaurant', preview: '/templates/restaurant-elegance.png',
+    category: 'restaurant', preview: '/templates/street-food-hub.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Flavor Street', content: 'Bold flavors from around the world' },
       { type: 'products', title: 'Our Menu', content: 'Tacos, bao buns, loaded fries, and craft sodas' },
@@ -172,7 +172,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-restaurant-5', name: 'The Rooftop Lounge', description: 'A sophisticated template for rooftop bars, lounges, and upscale casual dining with stunning visual design.',
-    category: 'restaurant', preview: '/templates/restaurant-elegance.png',
+    category: 'restaurant', preview: '/templates/rooftop-lounge.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Sky-High Dining', content: 'Cocktails and cuisine with panoramic city views' },
       { type: 'about', title: 'The Experience', content: 'Sunset sessions, live music, and curated menus' },
@@ -186,7 +186,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-restaurant-6', name: 'Veggie Garden', description: 'A fresh, green-themed template for vegan and vegetarian restaurants with earthy, natural aesthetics.',
-    category: 'restaurant', preview: '/templates/restaurant-elegance.png',
+    category: 'restaurant', preview: '/templates/veggie-garden.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Plant Powered', content: 'Delicious vegan cuisine that celebrates nature' },
       { type: 'about', title: 'Our Mission', content: 'Sustainable dining that tastes incredible' },
@@ -204,7 +204,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-clothing-1', name: 'Fashion Forward', description: 'A modern, minimal template for clothing brands and boutiques with clean lines and sophisticated layouts.',
-    category: 'clothing', preview: '/templates/fashion-forward.png',
+    category: 'clothing', preview: '/templates/fashion-forward.jpg',
     sections: makeSections([
       { type: 'hero', title: 'New Collection', content: 'Elevate your wardrobe with our latest designs' },
       { type: 'products', title: 'Shop', content: 'Dresses, tops, bottoms, and accessories' },
@@ -218,7 +218,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-clothing-2', name: 'Vintage Revival', description: 'A retro-inspired template for thrift stores, vintage shops, and retro fashion brands.',
-    category: 'clothing', preview: '/templates/fashion-forward.png',
+    category: 'clothing', preview: '/templates/vintage-revival.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Timeless Style', content: 'Curated vintage fashion from every era' },
       { type: 'products', title: 'Shop by Era', content: '60s mod, 70s boho, 80s power, 90s grunge' },
@@ -231,7 +231,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-clothing-3', name: 'Athleisure Pro', description: 'A bold, energetic template for sportswear and athletic clothing brands with dynamic layouts.',
-    category: 'clothing', preview: '/templates/fashion-forward.png',
+    category: 'clothing', preview: '/templates/athleisure-pro.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Move Better', content: 'Performance wear for every workout' },
       { type: 'products', title: 'Collections', content: 'Running, yoga, gym, and outdoor gear' },
@@ -245,7 +245,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-clothing-4', name: 'Thread & Needle', description: 'An elegant template for bespoke tailoring, custom suits, and made-to-measure clothing services.',
-    category: 'clothing', preview: '/templates/fashion-forward.png',
+    category: 'clothing', preview: '/templates/thread-needle.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Bespoke Excellence', content: 'Custom tailoring for the discerning gentleman' },
       { type: 'about', title: 'Craftsmanship', content: 'Hand-stitched quality since 1965' },
@@ -259,7 +259,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-clothing-5', name: 'Kids Wardrobe', description: 'A playful, colorful template for children\'s clothing stores with fun elements and parent-friendly navigation.',
-    category: 'clothing', preview: '/templates/fashion-forward.png',
+    category: 'clothing', preview: '/templates/kids-wardrobe.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Little Styles', content: 'Adorable, comfortable clothes for kids of all ages' },
       { type: 'products', title: 'Shop by Age', content: 'Baby (0-2), Toddler (2-5), Kids (6-12), Teens (13+)' },
@@ -277,7 +277,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-electronics-1', name: 'Tech Store Pro', description: 'A sleek, dark template for electronics stores with high-contrast design and modern grid layouts.',
-    category: 'electronics', preview: '/templates/tech-store-pro.png',
+    category: 'electronics', preview: '/templates/tech-store-pro.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Latest Tech', content: 'Cutting-edge electronics at competitive prices' },
       { type: 'products', title: 'Products', content: 'Laptops, phones, tablets, accessories, and smart home' },
@@ -290,7 +290,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-electronics-2', name: 'Apple Reseller Elite', description: 'A clean, Apple-inspired template for authorized Apple resellers and premium tech boutiques.',
-    category: 'electronics', preview: '/templates/tech-store-pro.png',
+    category: 'electronics', preview: '/templates/apple-reseller-elite.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Think Different', content: 'Premium Apple products and expert guidance' },
       { type: 'products', title: 'Products', content: 'Mac, iPad, iPhone, Apple Watch, and accessories' },
@@ -303,7 +303,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-electronics-3', name: 'Gaming Zone', description: 'A vibrant, neon-themed template for gaming stores and PC builders with dynamic visual effects.',
-    category: 'electronics', preview: '/templates/tech-store-pro.png',
+    category: 'electronics', preview: '/templates/gaming-zone.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Level Up', content: 'PC components, consoles, and gaming gear' },
       { type: 'products', title: 'Shop', content: 'GPUs, CPUs, monitors, keyboards, and headsets' },
@@ -317,7 +317,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-electronics-4', name: 'Smart Home Hub', description: 'A clean, modern template for smart home and IoT device retailers with emphasis on connectivity.',
-    category: 'electronics', preview: '/templates/tech-store-pro.png',
+    category: 'electronics', preview: '/templates/smart-home-hub.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Connected Living', content: 'Transform your home with smart technology' },
       { type: 'products', title: 'Devices', content: 'Smart speakers, lights, thermostats, cameras, and locks' },
@@ -331,7 +331,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-electronics-5', name: 'AudioPhile Store', description: 'A premium template for audio equipment stores, headphone brands, and music enthusiasts.',
-    category: 'electronics', preview: '/templates/tech-store-pro.png',
+    category: 'electronics', preview: '/templates/audiophile-store.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Sound Perfection', content: 'Premium audio equipment for discerning listeners' },
       { type: 'products', title: 'Equipment', content: 'Headphones, speakers, amplifiers, and turntables' },
@@ -348,7 +348,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-salon-1', name: 'Beauty Salon', description: 'A soft, feminine template for beauty salons and spas with delicate pink accents and graceful typography.',
-    category: 'salon', preview: '/templates/beauty-salon.png',
+    category: 'salon', preview: '/templates/beauty-salon.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Welcome', content: 'Your beauty transformation starts here' },
       { type: 'services', title: 'Services', content: 'Hair, skin, nails, and wellness treatments' },
@@ -362,7 +362,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-salon-2', name: 'Barbershop Classic', description: 'A masculine, vintage-themed template for traditional barbershops with warm wood tones and classic typography.',
-    category: 'salon', preview: '/templates/beauty-salon.png',
+    category: 'salon', preview: '/templates/barbershop-classic.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Classic Cuts', content: 'Traditional grooming for the modern gentleman' },
       { type: 'services', title: 'Services', content: 'Haircuts, hot towel shaves, beard trims' },
@@ -376,7 +376,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-salon-3', name: 'Zen Wellness Spa', description: 'A serene, minimal template for day spas and wellness centers with calming green and white aesthetics.',
-    category: 'salon', preview: '/templates/beauty-salon.png',
+    category: 'salon', preview: '/templates/zen-wellness-spa.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Find Your Zen', content: 'Luxury spa treatments for mind, body, and soul' },
       { type: 'services', title: 'Treatments', content: 'Massages, facials, body wraps, and meditation' },
@@ -390,7 +390,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-salon-4', name: 'Nail Art Studio', description: 'A creative, vibrant template for nail salons with colorful galleries and booking integration.',
-    category: 'salon', preview: '/templates/beauty-salon.png',
+    category: 'salon', preview: '/templates/nail-art-studio.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Nail Perfection', content: 'Stunning nail art and premium manicures' },
       { type: 'services', title: 'Menu', content: 'Gel, acrylic, nail art, pedicures, and treatments' },
@@ -404,7 +404,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-salon-5', name: 'Hair Color Lab', description: 'A trendy, editorial template for hair colorists and color studios with bold visuals and portfolio focus.',
-    category: 'salon', preview: '/templates/beauty-salon.png',
+    category: 'salon', preview: '/templates/hair-color-lab.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Color Revolution', content: 'Transformative hair color by expert colorists' },
       { type: 'services', title: 'Services', content: 'Balayage, ombré, highlights, color correction' },
@@ -422,7 +422,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-grocery-1', name: 'Fresh Mart', description: 'A clean, green-themed template for organic grocery stores and health food shops.',
-    category: 'grocery', preview: '/templates/bakery-delight.png',
+    category: 'grocery', preview: '/templates/fresh-mart.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Farm Fresh', content: 'Organic produce delivered to your door' },
       { type: 'products', title: 'Departments', content: 'Fruits, vegetables, dairy, bakery, and pantry' },
@@ -435,7 +435,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-grocery-2', name: 'Spice Market', description: 'A warm, aromatic template for ethnic grocery stores and spice shops with rich cultural aesthetics.',
-    category: 'grocery', preview: '/templates/bakery-delight.png',
+    category: 'grocery', preview: '/templates/spice-market.jpg',
     sections: makeSections([
       { type: 'hero', title: 'World of Spices', content: 'Authentic ingredients from every corner of the globe' },
       { type: 'products', title: 'Aisles', content: 'Spices, lentils, rice, sauces, and specialty items' },
@@ -448,7 +448,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-grocery-3', name: 'QuickCart Express', description: 'A modern, fast-paced template for convenience stores and quick-service grocery delivery.',
-    category: 'grocery', preview: '/templates/bakery-delight.png',
+    category: 'grocery', preview: '/templates/quickcart-express.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Fast & Fresh', content: 'Groceries delivered in 30 minutes or less' },
       { type: 'products', title: 'Categories', content: 'Snacks, drinks, household, and essentials' },
@@ -461,7 +461,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-grocery-4', name: 'Wine & Cheese Cellar', description: 'An elegant template for wine shops, cheese stores, and gourmet food boutiques.',
-    category: 'grocery', preview: '/templates/bakery-delight.png',
+    category: 'grocery', preview: '/templates/wine-cheese-cellar.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Curated Tastes', content: 'Fine wines and artisan cheeses from around the world' },
       { type: 'products', title: 'Collections', content: 'Wines by region, cheese boards, and gift sets' },
@@ -474,7 +474,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-grocery-5', name: 'Butcher & Provisions', description: 'A rustic, trustworthy template for butcher shops and specialty meat/seafood markets.',
-    category: 'grocery', preview: '/templates/bakery-delight.png',
+    category: 'grocery', preview: '/templates/butcher-provisions.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Quality Cuts', content: 'Locally sourced, hand-cut meats and fresh seafood' },
       { type: 'products', title: 'Counter', content: 'Beef, poultry, pork, lamb, and daily catch' },
@@ -491,7 +491,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-hardware-1', name: 'Hardware Hub', description: 'An industrial-strength template for hardware stores with bold, practical design reflecting reliability.',
-    category: 'hardware', preview: '/templates/hardware-hub.png',
+    category: 'hardware', preview: '/templates/hardware-hub.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Tools & More', content: 'Everything you need for your next project' },
       { type: 'products', title: 'Departments', content: 'Power tools, hand tools, lumber, plumbing, electrical' },
@@ -504,7 +504,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-hardware-2', name: 'DIY Paradise', description: 'A colorful, inspiring template for DIY and craft supply stores with project ideas and tutorials.',
-    category: 'hardware', preview: '/templates/hardware-hub.png',
+    category: 'hardware', preview: '/templates/diy-paradise.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Build Something', content: 'Tools, materials, and inspiration for every project' },
       { type: 'products', title: 'Shop', content: 'Power tools, hand tools, paints, and hardware' },
@@ -517,7 +517,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-hardware-3', name: 'Garden & Outdoor', description: 'A nature-themed template for garden centers and outdoor living stores with earthy greens and warm browns.',
-    category: 'hardware', preview: '/templates/hardware-hub.png',
+    category: 'hardware', preview: '/templates/garden-outdoor.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Outdoor Living', content: 'Plants, tools, and everything for your garden' },
       { type: 'products', title: 'Shop', content: 'Plants, pots, tools, fertilizers, and outdoor furniture' },
@@ -530,7 +530,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-hardware-4', name: 'PlumbPro Supply', description: 'A professional template for plumbing and electrical supply stores serving contractors and homeowners.',
-    category: 'hardware', preview: '/templates/hardware-hub.png',
+    category: 'hardware', preview: '/templates/plumbpro-supply.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Pro Supplies', content: 'Commercial-grade plumbing and electrical supplies' },
       { type: 'products', title: 'Inventory', content: 'Pipes, fittings, wire, panels, and fixtures' },
@@ -543,7 +543,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-hardware-5', name: 'Smart Home Depot', description: 'A modern template for home improvement superstores with organized departments and project guides.',
-    category: 'hardware', preview: '/templates/hardware-hub.png',
+    category: 'hardware', preview: '/templates/smart-home-depot.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Home Improvement', content: 'One-stop shop for every home project' },
       { type: 'products', title: 'Departments', content: 'Lumber, tools, paint, flooring, and appliances' },
@@ -561,7 +561,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-medical-1', name: 'Medical Care', description: 'A clean, professional template for medical clinics with trust-inspiring design and intuitive navigation.',
-    category: 'medical', preview: '/templates/medical-care.png',
+    category: 'medical', preview: '/templates/medical-care.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Your Health', content: 'Compassionate healthcare for your entire family' },
       { type: 'about', title: 'About Us', content: 'Board-certified physicians since 2005' },
@@ -575,7 +575,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-medical-2', name: 'Dental Smile', description: 'A bright, friendly template for dental practices with emphasis on patient comfort and modern care.',
-    category: 'medical', preview: '/templates/medical-care.png',
+    category: 'medical', preview: '/templates/dental-smile.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Your Smile', content: 'Gentle dental care for the whole family' },
       { type: 'services', title: 'Treatments', content: 'Cleanings, fillings, whitening, orthodontics, implants' },
@@ -589,7 +589,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-medical-3', name: 'VetCare Clinic', description: 'A warm, caring template for veterinary clinics and pet hospitals with playful animal-themed elements.',
-    category: 'medical', preview: '/templates/medical-care.png',
+    category: 'medical', preview: '/templates/vetcare-clinic.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Pet Wellness', content: 'Expert veterinary care for your furry family members' },
       { type: 'services', title: 'Services', content: 'Wellness exams, surgery, dental, vaccinations' },
@@ -603,7 +603,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-medical-4', name: 'PhysioActive', description: 'A dynamic, energetic template for physiotherapy and sports medicine clinics with active lifestyle imagery.',
-    category: 'medical', preview: '/templates/medical-care.png',
+    category: 'medical', preview: '/templates/physioactive.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Move Freely', content: 'Expert physiotherapy to get you back to doing what you love' },
       { type: 'services', title: 'Treatments', content: 'Sports rehab, manual therapy, dry needling, exercise programs' },
@@ -617,7 +617,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-medical-5', name: 'EyeCare Optometry', description: 'A crisp, clean template for optometry practices and eyewear boutiques with emphasis on style and clarity.',
-    category: 'medical', preview: '/templates/medical-care.png',
+    category: 'medical', preview: '/templates/eyecare-optometry.jpg',
     sections: makeSections([
       { type: 'hero', title: 'See Clearly', content: 'Comprehensive eye care and designer eyewear' },
       { type: 'products', title: 'Eyewear', content: 'Glasses, sunglasses, and contact lenses' },
@@ -635,7 +635,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-boutique-1', name: 'Luxe Accessories', description: 'A premium template for jewelry and accessories boutiques with gold accents and elegant layouts.',
-    category: 'boutique', preview: '/templates/fashion-forward.png',
+    category: 'boutique', preview: '/templates/luxe-accessories.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Timeless Elegance', content: 'Handcrafted jewelry and accessories for every occasion' },
       { type: 'products', title: 'Collections', content: 'Necklaces, rings, earrings, bracelets, and handbags' },
@@ -649,7 +649,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-boutique-2', name: 'Home Decor Studio', description: 'A warm, inviting template for home decor and interior design boutiques with lifestyle photography.',
-    category: 'boutique', preview: '/templates/fashion-forward.png',
+    category: 'boutique', preview: '/templates/home-decor-studio.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Beautiful Spaces', content: 'Curated home decor for modern living' },
       { type: 'products', title: 'Shop', content: 'Furniture, lighting, textiles, and accessories' },
@@ -663,7 +663,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-boutique-3', name: 'Artisan Candle Co.', description: 'A cozy, atmospheric template for candle makers and fragrance boutiques with warm, glowing aesthetics.',
-    category: 'boutique', preview: '/templates/fashion-forward.png',
+    category: 'boutique', preview: '/templates/artisan-candle-co.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Light & Scent', content: 'Hand-poured artisan candles and home fragrances' },
       { type: 'products', title: 'Collection', content: 'Soy candles, wax melts, diffusers, and gift sets' },
@@ -677,7 +677,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-boutique-4', name: 'Watch Collector', description: 'A sophisticated template for watch boutiques and luxury timepiece retailers with refined dark design.',
-    category: 'boutique', preview: '/templates/fashion-forward.png',
+    category: 'boutique', preview: '/templates/watch-collector.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Timeless Pieces', content: 'Luxury watches for collectors and connoisseurs' },
       { type: 'products', title: 'Timepieces', content: 'Automatic, chronograph, diver, and dress watches' },
@@ -691,7 +691,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-boutique-5', name: 'Gift Box Boutique', description: 'A cheerful, colorful template for gift shops and curated gift box services.',
-    category: 'boutique', preview: '/templates/fashion-forward.png',
+    category: 'boutique', preview: '/templates/gift-box-boutique.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Perfect Gifts', content: 'Curated gift boxes for every occasion' },
       { type: 'products', title: 'Gift Boxes', content: 'Birthday, wedding, corporate, and holiday collections' },
@@ -709,7 +709,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-service-1', name: 'Service Pro', description: 'A professional template for service businesses and consultants with polished design and clear CTAs.',
-    category: 'service', preview: '/templates/service-pro.png',
+    category: 'service', preview: '/templates/service-pro.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Expert Services', content: 'Professional solutions tailored to your business' },
       { type: 'about', title: 'About', content: '10+ years delivering exceptional results' },
@@ -724,7 +724,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-service-2', name: 'Legal Associates', description: 'A dignified, authoritative template for law firms and legal services with emphasis on trust and expertise.',
-    category: 'service', preview: '/templates/service-pro.png',
+    category: 'service', preview: '/templates/legal-associates.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Legal Excellence', content: 'Trusted legal counsel for individuals and businesses' },
       { type: 'about', title: 'Our Firm', content: 'Over 30 years of combined legal experience' },
@@ -739,7 +739,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-service-3', name: 'Creative Agency', description: 'A bold, portfolio-focused template for design agencies and creative studios with visual impact.',
-    category: 'service', preview: '/templates/service-pro.png',
+    category: 'service', preview: '/templates/creative-agency.jpg',
     sections: makeSections([
       { type: 'hero', title: 'We Create', content: 'Branding, design, and digital experiences' },
       { type: 'about', title: 'Our Story', content: 'Award-winning creative team since 2015' },
@@ -754,7 +754,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-service-4', name: 'CleanPro Services', description: 'A fresh, clean template for cleaning services and maintenance companies with trust-building elements.',
-    category: 'service', preview: '/templates/service-pro.png',
+    category: 'service', preview: '/templates/cleanpro-services.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Sparkling Clean', content: 'Professional residential and commercial cleaning' },
       { type: 'services', title: 'Services', content: 'Regular cleaning, deep clean, move-in/out, office cleaning' },
@@ -768,7 +768,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-service-5', name: 'FitLife Coaching', description: 'An energetic template for personal trainers and fitness coaches with motivational design.',
-    category: 'service', preview: '/templates/service-pro.png',
+    category: 'service', preview: '/templates/fitlife-coaching.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Transform', content: 'Personalized fitness coaching for lasting results' },
       { type: 'services', title: 'Programs', content: '1-on-1 training, group classes, online coaching' },
@@ -787,7 +787,7 @@ export const allTemplates: Template[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   {
     id: 'tpl-other-1', name: 'Wedding Planner', description: 'A romantic, elegant template for wedding planners and event coordinators with soft, dreamy aesthetics.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/wedding-planner.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Your Perfect Day', content: 'Full-service wedding planning and coordination' },
       { type: 'about', title: 'Our Story', content: 'Creating dream weddings since 2010' },
@@ -802,7 +802,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-2', name: 'Real Estate Elite', description: 'A premium template for real estate agents and property firms with property listing layouts and search.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/real-estate-elite.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Find Home', content: 'Luxury properties and expert real estate guidance' },
       { type: 'products', title: 'Listings', content: 'Featured properties and new listings' },
@@ -816,7 +816,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-3', name: 'Photography Studio', description: 'A visual-first template for photography studios and freelance photographers with stunning portfolio layouts.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/photography-studio.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Captured Moments', content: 'Professional photography for life\'s milestones' },
       { type: 'services', title: 'Services', content: 'Weddings, portraits, commercial, and events' },
@@ -831,7 +831,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-4', name: 'Music Academy', description: 'A vibrant, creative template for music schools and academies with engaging course displays.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/music-academy.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Learn Music', content: 'Expert music instruction for all ages and skill levels' },
       { type: 'services', title: 'Lessons', content: 'Piano, guitar, drums, vocals, and music theory' },
@@ -846,7 +846,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-5', name: 'Yoga & Meditation', description: 'A peaceful, zen-inspired template for yoga studios and meditation centers with calming design.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/yoga-meditation.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Inner Peace', content: 'Yoga and meditation for body, mind, and spirit' },
       { type: 'services', title: 'Classes', content: 'Vinyasa, Hatha, Yin, Meditation, and Breathwork' },
@@ -861,7 +861,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-6', name: 'Childcare Center', description: 'A warm, friendly template for daycare centers and preschools with parent-focused features.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/childcare-center.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Happy Kids', content: 'Safe, nurturing childcare for children 6 months to 6 years' },
       { type: 'about', title: 'Our Approach', content: 'Play-based learning in a loving environment' },
@@ -876,7 +876,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-7', name: 'Auto Detailing', description: 'A sleek, professional template for car detailing and auto services with dark automotive styling.',
-    category: 'other', preview: '/templates/service-pro.png',
+    category: 'other', preview: '/templates/auto-detailing.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Showroom Shine', content: 'Premium auto detailing and ceramic coating' },
       { type: 'services', title: 'Packages', content: 'Express, full detail, ceramic coating, and paint correction' },
@@ -890,7 +890,7 @@ export const allTemplates: Template[] = [
   },
   {
     id: 'tpl-other-8', name: 'Coffee Roasters', description: 'A rich, aromatic template for coffee roasters and specialty cafes with warm, inviting design.',
-    category: 'other', preview: '/templates/bakery-delight.png',
+    category: 'other', preview: '/templates/coffee-roasters.jpg',
     sections: makeSections([
       { type: 'hero', title: 'Fresh Roasted', content: 'Single-origin specialty coffee roasted in small batches' },
       { type: 'products', title: 'Coffee', content: 'Light, medium, and dark roasts from 12 countries' },

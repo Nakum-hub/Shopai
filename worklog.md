@@ -31,3 +31,24 @@ Stage Summary:
 - Both views have load-more pagination for smooth browsing
 - All data flows correctly through Zustand store to builder-view.tsx
 - External design resources (21st.dev, designarena.ai, etc.) already linked and working
+---
+Task ID: 1
+Agent: Main
+Task: Generate 60 unique template preview images and update references
+
+Work Log:
+- Audited all 60 templates in src/data/templates.ts - found only 8 shared images across all
+- Created AI image generation prompts for each unique template (creative, category-specific)
+- Generated 60 unique AI images (1344x768) using z-ai CLI tool
+- Fixed JPEG-as-PNG issue: images generated as JPEG, renamed .png to .jpg
+- Updated all 60 preview references in src/data/templates.ts from .png to .jpg
+- Updated fallback image references in src/app/api/templates/route.ts
+- Cleaned up old shared images (bakery-delight.png etc)
+- Verified all 60 image paths have matching files (0 missing)
+- Lint passes with 0 errors
+
+Stage Summary:
+- 60 unique AI-generated template images in /public/templates/*.jpg
+- Each template has its own unique, creative preview image
+- Categories covered: Bakery(6), Restaurant(6), Clothing(5), Electronics(5), Salon(5), Grocery(5), Hardware(5), Medical(5), Boutique(5), Service(5), Other(8)
+- All references updated to .jpg extension
