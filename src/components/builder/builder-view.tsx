@@ -27,7 +27,6 @@ import { Progress } from '@/components/ui/progress';
 
 import {
   Mic,
-  MicOff,
   Send,
   Sparkles,
   Store,
@@ -41,13 +40,11 @@ import {
   User,
   ChevronDown,
   ChevronRight,
-  Play,
   CheckCircle2,
   Loader2,
   AlertTriangle,
   XCircle,
   Brain,
-  Globe,
   Code2,
   ShieldCheck,
   Rocket,
@@ -71,12 +68,10 @@ import {
   Hammer,
   Apple,
   MonitorSmartphone,
-  GraduationCap,
-  HelpCircle,
 } from 'lucide-react';
 
 // =============================================================================
-// Constants & Mock Data
+// Constants
 // =============================================================================
 
 const CATEGORY_ICONS: Record<BusinessCategory, React.ReactNode> = {
@@ -133,88 +128,6 @@ const EXAMPLE_PROMPTS = [
     category: 'restaurant' as BusinessCategory,
   },
 ];
-
-const QUICK_REPLIES = [
-  'That looks perfect!',
-  'I want to add more products',
-  'Change the color theme',
-  'Add a testimonials section',
-  'Include a booking form',
-  'Make it more minimal',
-];
-
-const MOCK_AI_RESPONSES = [
-  "I've analyzed your business description! Here's what I've extracted so far:",
-  "Great details! Let me ask a few follow-up questions to make your website even better. Do you offer any seasonal specials or loyalty programs?",
-  "Perfect! I also noticed you mentioned your location — would you like to include a Google Maps embed on your contact page?",
-  "Excellent! I have enough information now. Would you like me to proceed with generating your website, or would you like to add any more details?",
-];
-
-const MOCK_BUSINESS_PROFILE: BusinessProfile = {
-  name: 'The Flour Garden',
-  category: 'bakery',
-  description:
-    'Artisan bakery specializing in sourdough bread, custom cakes, and pastries. A warm neighborhood bakery experience.',
-  location: 'Church Street, Bangalore',
-  phone: '+91 98765 43210',
-  email: 'hello@theflourgarden.in',
-  hours: 'Mon-Sat: 7AM-9PM, Sun: 8AM-6PM',
-  products: [
-    {
-      name: 'Sourdough Loaf',
-      description: '48-hour fermented artisan sourdough',
-      price: '₹350',
-      category: 'Breads',
-    },
-    {
-      name: 'Custom Cakes',
-      description: 'Made-to-order celebration cakes',
-      price: '₹1,200+',
-      category: 'Cakes',
-    },
-    {
-      name: 'Croissants',
-      description: 'Buttery French-style croissants',
-      price: '₹120',
-      category: 'Pastries',
-    },
-    {
-      name: 'Cinnamon Rolls',
-      description: 'Fresh-baked with cream cheese glaze',
-      price: '₹150',
-      category: 'Pastries',
-    },
-  ],
-  services: [
-    {
-      name: 'Custom Cake Consultation',
-      description: 'One-on-one consultation for custom cake orders',
-      duration: '30 min',
-      price: 'Free',
-    },
-    {
-      name: 'Baking Workshop',
-      description: 'Learn sourdough basics in our weekend workshop',
-      duration: '3 hours',
-      price: '₹2,500',
-    },
-  ],
-  style: {
-    primaryColor: '#D4A574',
-    secondaryColor: '#2D5016',
-    fontFamily: 'Playfair Display',
-    theme: 'elegant',
-    mood: 'Warm, inviting, artisanal',
-  },
-  features: [
-    'Online ordering',
-    'Custom cake form',
-    'Photo gallery',
-    'Google Maps',
-    'Customer reviews',
-    'Newsletter signup',
-  ],
-};
 
 interface PipelineStep {
   id: GenerationStatus;
@@ -278,33 +191,6 @@ const PIPELINE_STEPS: PipelineStep[] = [
     icon: <Rocket className="h-4 w-4" />,
     description: 'Launching your live website preview',
   },
-];
-
-const MOCK_LOGS: Omit<GenerationLog, 'id' | 'timestamp'>[] = [
-  { level: 'info', agent: 'Voice Agent', message: 'Transcribing audio stream...' },
-  { level: 'success', agent: 'Voice Agent', message: 'Transcription complete: 147 words detected' },
-  { level: 'info', agent: 'Business Analyzer', message: 'Parsing business name: "The Flour Garden"' },
-  { level: 'info', agent: 'Business Analyzer', message: 'Category detected: bakery (confidence: 96%)' },
-  { level: 'success', agent: 'Business Analyzer', message: 'Extracted 4 products and 2 services' },
-  { level: 'info', agent: 'Planner Agent', message: 'Planning 7 website sections...' },
-  { level: 'info', agent: 'Planner Agent', message: 'Section order: hero → about → products → gallery → testimonials → hours → contact' },
-  { level: 'success', agent: 'Planner Agent', message: 'Site architecture finalized' },
-  { level: 'info', agent: 'Branding Agent', message: 'Generating color palette from business mood...' },
-  { level: 'success', agent: 'Branding Agent', message: 'Primary: #D4A574 (Warm Gold), Secondary: #2D5016 (Forest Green)' },
-  { level: 'info', agent: 'Content Agent', message: 'Writing hero headline: "Handcrafted with Love, Baked with Passion"' },
-  { level: 'info', agent: 'Content Agent', message: 'Generating product descriptions for 4 items...' },
-  { level: 'success', agent: 'Content Agent', message: 'All copy generated (847 words total)' },
-  { level: 'info', agent: 'Section Builder', message: 'Building hero section with CTA...' },
-  { level: 'info', agent: 'Section Builder', message: 'Building product grid (4 items)...' },
-  { level: 'info', agent: 'Section Builder', message: 'Building contact form with map embed...' },
-  { level: 'success', agent: 'Section Builder', message: 'All 7 sections generated' },
-  { level: 'info', agent: 'Assembler', message: 'Compiling responsive HTML...' },
-  { level: 'info', agent: 'Assembler', message: 'Injecting Tailwind CSS classes...' },
-  { level: 'success', agent: 'Assembler', message: 'Page assembled: 2,340 lines of HTML/CSS' },
-  { level: 'info', agent: 'Validator', message: 'Running Lighthouse audit...' },
-  { level: 'success', agent: 'Validator', message: 'SEO Score: 95/100, Performance: 92/100, Accessibility: 98/100' },
-  { level: 'info', agent: 'Deployer', message: 'Deploying to preview environment...' },
-  { level: 'success', agent: 'Deployer', message: 'Preview deployed successfully! 🚀' },
 ];
 
 // =============================================================================
@@ -476,43 +362,6 @@ function VoiceInputSection() {
     };
   }, []);
 
-  // --- Fallback mock transcription (kept for no-mic environments) ---
-  const simulateTranscription = useCallback(() => {
-    const fullText =
-      "I own a bakery in Bangalore called The Flour Garden. We specialize in sourdough bread, custom cakes, and artisan pastries. We're located on Church Street. We're open Monday to Saturday 7AM to 9PM, and Sunday 8AM to 6PM. Our popular items include sourdough loaves, cinnamon rolls, and custom celebration cakes. We also do baking workshops on weekends.";
-
-    setIsRecording(true);
-    setSimStage('transcribing');
-    let charIndex = 0;
-
-    const typeInterval = setInterval(() => {
-      if (charIndex < fullText.length) {
-        const chunkSize = Math.floor(Math.random() * 4) + 2;
-        charIndex = Math.min(charIndex + chunkSize, fullText.length);
-        setVoiceTranscript(fullText.substring(0, charIndex));
-      } else {
-        clearInterval(typeInterval);
-        setIsRecording(false);
-        setSimStage('analyzing');
-
-        // Simulate analysis delay
-        simTimerRef.current.push(
-          setTimeout(() => {
-            addChatMessage({
-              id: `msg-${Date.now()}`,
-              role: 'user',
-              content: fullText,
-              timestamp: Date.now(),
-            });
-            setSimStage('chatting');
-            simulateChat(fullText);
-          }, 1500)
-        );
-      }
-    }, 40);
-    simTimerRef.current.push(typeInterval);
-  }, []);
-
   // --- Process voice audio via ASR + LLM API ---
   const processVoiceAudio = useCallback(
     async (base64Audio: string) => {
@@ -552,15 +401,13 @@ function VoiceInputSection() {
         console.error('[VoiceProcessing] Error:', error);
         showToast({
           title: 'Voice Processing Error',
-          description: 'Could not process audio. Falling back to demo mode.',
+          description: 'Could not process audio. Please try again or type your message.',
           variant: 'destructive',
         });
         setSimStage('idle');
-        // Fall back to mock transcription
-        simulateTranscription();
       }
     },
-    [addChatMessage, setBusinessProfile, showToast, simulateTranscription, mapApiBusinessProfile]
+    [addChatMessage, setBusinessProfile, showToast, mapApiBusinessProfile]
   );
 
   // --- Real microphone recording ---
@@ -601,10 +448,13 @@ function VoiceInputSection() {
     } catch (err) {
       console.warn('[VoiceRecording] Mic access denied or unavailable:', err);
       setMicPermissionDenied(true);
-      // Fall back to mock transcription
-      simulateTranscription();
+      showToast({
+        title: 'Microphone Unavailable',
+        description: 'Microphone access was denied or is unavailable. Please type your message instead.',
+        variant: 'destructive',
+      });
     }
-  }, [processVoiceAudio, simulateTranscription]);
+  }, [processVoiceAudio, showToast]);
 
   const stopRecording = useCallback(() => {
     // Clear auto-stop timer
@@ -1091,7 +941,11 @@ function VoiceInputSection() {
                             if (isMicSupported && !micPermissionDenied) {
                               startRecording();
                             } else {
-                              simulateTranscription();
+                              showToast({
+                                title: 'Microphone Unavailable',
+                                description: 'Microphone access is not available. Please type your message instead.',
+                                variant: 'destructive',
+                              });
                             }
                           } else if (isRecording) {
                             stopRecording();
@@ -1117,10 +971,10 @@ function VoiceInputSection() {
                       {!isRecording && simStage === 'idle' && (
                         <p className="text-xs text-muted-foreground mt-1">
                           {micPermissionDenied
-                            ? 'Microphone unavailable — using demo mode'
+                            ? 'Microphone unavailable — please type your message'
                             : isMicSupported
                               ? 'Speak naturally — AI will extract everything'
-                              : 'Voice not supported — click for demo mode'
+                              : 'Voice not supported — please type your message'
                           }
                         </p>
                       )}
@@ -1367,7 +1221,7 @@ function VoiceInputSection() {
                     className="px-4 pb-2"
                   >
                     <div className="flex flex-wrap gap-1.5">
-                      {(activeQuickReplies.length > 0 ? activeQuickReplies : QUICK_REPLIES).map((reply) => (
+                      {activeQuickReplies.map((reply) => (
                         <Button
                           key={reply}
                           variant="outline"
@@ -1423,7 +1277,7 @@ function VoiceInputSection() {
               </CardHeader>
               <Separator />
               <CardContent className="p-4 space-y-3">
-                <BusinessInfoCards profile={businessProfile || MOCK_BUSINESS_PROFILE} />
+                <BusinessInfoCards profile={businessProfile!} />
               </CardContent>
             </Card>
           </motion.div>

@@ -982,37 +982,35 @@ async function runGenerationPipeline(
     "info",
     "System",
     `Generation pipeline started for storefront: ${storefrontId}`,
-    `Session: ${sessionId} | Execution: ${executionId}`
+    `Session: ${sessionId} | Execution: ${executionId} | Mode: DAG with parallel branches`
   );
 
   try {
-    // --- Execute Pipeline Stages ---
-
-    // Stage 1: Processing Voice
+    // --- Execute Pipeline Stages (DAG with parallel branches) ---
+    // Layer 1: Voice (conditional — skipped if no transcript)
     await updateExecutionStage(ctx, "processing_voice");
     await stageProcessingVoice(ctx);
 
-    // Stage 2: Understanding Business
+    // Layer 2: Business Understanding (depends on voice output)
     await updateExecutionStage(ctx, "understanding_business");
     await stageUnderstandingBusiness(ctx);
 
-    // Stage 3: Planning Structure
-    await updateExecutionStage(ctx, "planning_structure");
-    await stagePlanningStructure(ctx);
+    // Layer 3: Planning + Branding in PARALLEL (both depend only on business understanding)
+    addLog(ctx, "info", "System", "Executing structure planning and branding in parallel", "These stages are independent — running concurrently to reduce latency");
+    await Promise.all([
+      (async () => { await updateExecutionStage(ctx, "planning_structure"); await stagePlanningStructure(ctx); })(),
+      (async () => { await updateExecutionStage(ctx, "generating_branding"); await stageGeneratingBranding(ctx); })(),
+    ]);
 
-    // Stage 4: Generating Branding
-    await updateExecutionStage(ctx, "generating_branding");
-    await stageGeneratingBranding(ctx);
-
-    // Stage 5: Generating Content
+    // Layer 4: Content Generation (depends on plan + branding)
     await updateExecutionStage(ctx, "generating_content");
     await stageGeneratingContent(ctx);
 
-    // Stage 6: Generating Sections
+    // Layer 5: Section Generation (depends on content + branding)
     await updateExecutionStage(ctx, "generating_sections");
     await stageGeneratingSections(ctx);
 
-    // Stage 7: Assembling Pages (MAIN GENERATION)
+    // Layer 6: Page Assembly (depends on sections)
     await updateExecutionStage(ctx, "assembling_pages");
     await stageAssemblingPages(ctx);
 
