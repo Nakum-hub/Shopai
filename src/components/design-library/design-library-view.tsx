@@ -527,7 +527,7 @@ export function DesignLibraryView() {
               {filteredVariants.length > visibleVariantCount && (
                 <div className="flex justify-center mt-4">
                   <Button variant="outline" onClick={() => setVisibleVariantCount((prev) => prev + 12)} className="min-w-[200px]">
-                    Show More ({filteredVariants.length - visibleVariantCount} more)
+                    Load More
                   </Button>
                 </div>
               )}

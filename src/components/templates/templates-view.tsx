@@ -565,7 +565,7 @@ export function TemplatesView() {
             onClick={() => setVisibleCount((prev) => prev + 12)}
             className="min-w-[200px]"
           >
-            Load More Templates ({filteredTemplates.length - visibleCount} remaining)
+            Load More
           </Button>
         </div>
       )}
