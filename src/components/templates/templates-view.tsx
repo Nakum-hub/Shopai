@@ -172,6 +172,11 @@ export function TemplatesView() {
   const [error, setError] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(12);
 
+  // Reset visible count when filters change
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [activeCategory, searchQuery]);
+
   // Fetch templates from API on mount
   useEffect(() => {
     let cancelled = false;

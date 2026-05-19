@@ -323,6 +323,11 @@ export function DesignLibraryView() {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [visibleVariantCount, setVisibleVariantCount] = useState(12);
 
+  // Reset variant count when switching categories or style
+  React.useEffect(() => {
+    setVisibleVariantCount(12);
+  }, [selectedCategory, activeStyle]);
+
   // Filter components
   const filteredCategories = useMemo(() => {
     let cats = componentCategories;
