@@ -3,7 +3,7 @@
 // =============================================================================
 
 // Navigation
-export type ViewType = 'builder' | 'preview' | 'projects' | 'templates' | 'agents' | 'analytics' | 'settings';
+export type ViewType = 'builder' | 'preview' | 'projects' | 'templates' | 'design-library' | 'agents' | 'analytics' | 'settings';
 
 // Storefront
 export type StorefrontStatus = 'draft' | 'generating' | 'ready' | 'published' | 'error';
@@ -209,4 +209,56 @@ export interface VoiceSession {
   confidence: number;
   duration: number;
   language: string;
+}
+
+// Design Library
+export type DesignComponentCategory =
+  | 'hero'
+  | 'navigation'
+  | 'features'
+  | 'pricing'
+  | 'testimonials'
+  | 'cta'
+  | 'about'
+  | 'footer'
+  | 'contact'
+  | 'gallery'
+  | 'themes';
+
+export type DesignStyle = 'minimal' | 'bold' | 'dark' | 'gradient' | 'glass' | 'retro' | 'neomorphic' | 'brutalist';
+
+export interface DesignComponent {
+  id: string;
+  name: string;
+  description: string;
+  category: DesignComponentCategory;
+  style: DesignStyle;
+  preview: string;
+  html: string;
+  css: string;
+  tags: string[];
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  popular: boolean;
+  featured: boolean;
+  useCount: number;
+}
+
+export interface DesignTheme {
+  id: string;
+  name: string;
+  description: string;
+  preview: string;
+  colors: {
+    primary: string;
+    secondary: string;
+    accent: string;
+    background: string;
+    foreground: string;
+    muted: string;
+  };
+  fontFamily: string;
+  mood: string;
+  style: DesignStyle;
+  popular: boolean;
+  useCount: number;
 }

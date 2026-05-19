@@ -13,6 +13,7 @@ import { BuilderView } from '@/components/builder/builder-view';
 import { PreviewView } from '@/components/preview/preview-view';
 import { ProjectsView } from '@/components/projects/projects-view';
 import { TemplatesView } from '@/components/templates/templates-view';
+import { DesignLibraryView } from '@/components/design-library/design-library-view';
 import { AnalyticsView } from '@/components/analytics/analytics-view';
 import { SettingsView } from '@/components/settings/settings-view';
 import { AgentsView } from '@/components/agents/agents-view';
@@ -22,6 +23,7 @@ const viewComponents: Record<string, React.ComponentType> = {
   preview: PreviewView,
   projects: ProjectsView,
   templates: TemplatesView,
+  'design-library': DesignLibraryView,
   agents: AgentsView,
   analytics: AnalyticsView,
   settings: SettingsView,

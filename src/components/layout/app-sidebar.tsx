@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Globe,
   Zap,
+  Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
@@ -36,6 +37,7 @@ const navItems: NavItem[] = [
   { id: 'preview', label: 'Preview', icon: Eye },
   { id: 'projects', label: 'My Storefronts', icon: FolderKanban, badge: '3', badgeColor: 'bg-sky-500' },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+  { id: 'design-library', label: 'Design Library', icon: Palette },
   { id: 'agents', label: 'AI Agents', icon: Bot },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'settings', label: 'Settings', icon: Settings },
