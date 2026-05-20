@@ -1,0 +1,57 @@
+# =============================================================================
+# StoreCraft AI - Docker Ignore
+# =============================================================================
+
+# Dependencies (installed during build)
+node_modules/
+mini-services/*/node_modules/
+
+# Build output
+.next/
+out/
+dist/
+build/
+
+# Database files (not needed in image, mounted as volume)
+db/*.db
+db/*.db-journal
+*.db
+*.db-journal
+
+# Environment files (injected at runtime)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (don't recurse)
+docker-compose*.yml
+.dockerignore
+
+# Logs
+logs/
+*.log
+dev.log
+
+# Mini services (built separately)
+mini-services/generation-service/node_modules/
+
+# Documentation
+*.md
+LICENSE
+
+# Misc
+.caddy/

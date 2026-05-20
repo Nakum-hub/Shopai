@@ -44,8 +44,8 @@ services:
   # ---------------------------------------------------------------------------
   generation-service:
     build:
-      context: ./mini-services/generation-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: mini-services/generation-service/Dockerfile
     container_name: storecraft-generation
     restart: unless-stopped
     ports:
@@ -53,6 +53,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3002
+      - DATABASE_URL=file:/app/data/storecraft.db
+    volumes:
+      - app-data:/app/data
     networks:
       - storecraft-network
     healthcheck:

@@ -1,14 +1,16 @@
 import { Server, Socket } from "socket.io";
 import ZAI from "z-ai-web-dev-sdk";
-import { PrismaClient } from "/home/z/my-project/node_modules/@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 // =============================================================================
 // Database Connection
 // =============================================================================
 
+const DATABASE_URL = process.env.DATABASE_URL || "file:/home/z/my-project/db/custom.db";
+
 const prisma = new PrismaClient({
   datasources: {
-    db: { url: "file:/home/z/my-project/db/custom.db" },
+    db: { url: DATABASE_URL },
   },
 });
 
