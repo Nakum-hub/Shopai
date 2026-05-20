@@ -1,4 +1,49 @@
 ---
+Task ID: 6
+Agent: Main Agent
+Task: Enable React Strict Mode and fix all underlying issues (Audit Item #4)
+
+Work Log:
+- Enabled reactStrictMode: true in next.config.ts (was false)
+- Removed typescript.ignoreBuildErrors from next.config.ts (was hiding real errors)
+- Comprehensive audit of all 12 client components across 6 violation categories (A-F)
+- Found 16 issues across 8 files, fixed all:
+- builder-view.tsx (6 issues):
+  - Added mountedRef with cleanup for unmount guards
+  - Fixed 3 useEffect dependency arrays (selectedTemplate, selectedDesignComponent, selectedDesignTheme)
+  - Added mountedRef guards to 3 async state mutations (handleTextSubmit, simulateChat x2)
+- analytics-view.tsx (1 issue):
+  - Replaced useCallback+useEffect with AbortController pattern for parallel fetch
+  - Extracted fetchAllData as stable callback for retry button reuse
+- projects-view.tsx (1 issue):
+  - Added AbortController to storefronts fetch with cleanup
+  - Extracted fetchStorefronts as stable callback for retry button reuse
+- agents-view.tsx (1 issue):
+  - Added AbortController to pipeline fetch with cleanup
+  - Extracted fetchPipeline as stable callback for retry/refresh button reuse
+- design-library-view.tsx (1 issue):
+  - Added copyTimerRef + useEffect cleanup for setTimeout in handleCopyCode
+  - Added useRef, useEffect imports
+- settings-view.tsx (1 issue):
+  - Added saveTimerRef + useEffect cleanup for setTimeout in handleSave
+  - Added useRef, useEffect imports
+- templates-view.tsx (1 issue):
+  - Added cancelled flag to handleRetry Promise chain for unmount guard
+- preview-view.tsx (2 issues):
+  - Added mountedRef with cleanup for unmount guards
+  - Added mountedRef checks before every setState in handleGenerate (after fetch, after json, in catch, in finally)
+- Verification: tsc --noEmit 0 errors ✅, eslint 0 errors ✅, dev server starts with Strict Mode double-mount ✅
+
+Stage Summary:
+- React Strict Mode now ENABLED — double-mount behavior confirmed in dev logs
+- All 16 Strict Mode violations across 8 files fixed
+- 3 categories of issues fixed:
+  - Category A (Memory Leaks): setTimeout cleanup in 2 files
+  - Category B (Unmounted State Mutation): AbortController in 3 files, mountedRef in 2 files, cancelled flag in 1 file
+  - Category D (Missing Dependencies): 3 useEffect dep arrays fixed
+- No Category C (side effects during render) or E (double-render) issues found
+- typescript.ignoreBuildErrors removed — real errors no longer hidden
+---
 Task ID: 5
 Agent: Main Agent
 Task: Migrate from SQLite to PostgreSQL + Redis + BullMQ (Audit Item #2)

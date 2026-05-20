@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
@@ -143,10 +143,17 @@ export function SettingsView() {
   const { settings, updateSettings } = useAppStore();
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [saved, setSaved] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup save timer on unmount
+  useEffect(() => {
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, []);
 
   const handleSave = () => {
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => setSaved(false), 2000);
   };
 
   return (

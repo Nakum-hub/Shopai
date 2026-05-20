@@ -427,17 +427,18 @@ export function AgentsView() {
   const [expandedLogs, setExpandedLogs] = useState<PipelineLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
-  // Fetch pipeline executions
-  const fetchPipeline = useCallback(async () => {
+  // Fetch pipeline executions (stable callback for reuse in buttons)
+  const fetchPipeline = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/pipeline?limit=20');
+      const res = await fetch('/api/pipeline?limit=20', signal ? { signal } : undefined);
       if (!res.ok) throw new Error(`Failed to fetch pipeline (status ${res.status})`);
       const data: PipelineApiResponse = await res.json();
       setExecutions(data.executions);
       setStats(data.stats);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('[AGENTS_VIEW] Failed to fetch pipeline:', err);
       setError(err instanceof Error ? err.message : 'Failed to load pipeline data');
       toast({
@@ -450,8 +451,11 @@ export function AgentsView() {
     }
   }, [toast]);
 
+  // Fetch on mount with AbortController
   useEffect(() => {
-    fetchPipeline();
+    const controller = new AbortController();
+    fetchPipeline(controller.signal);
+    return () => controller.abort();
   }, [fetchPipeline]);
 
   // Fetch execution logs on expand
@@ -541,7 +545,7 @@ export function AgentsView() {
             variant="ghost"
             size="sm"
             className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            onClick={fetchPipeline}
+            onClick={() => fetchPipeline()}
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1" />
             Retry
@@ -633,7 +637,7 @@ export function AgentsView() {
                     variant="ghost"
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={fetchPipeline}
+                    onClick={() => fetchPipeline()}
                   >
                     <RotateCcw className="h-3.5 w-3.5 mr-1" />
                     Refresh

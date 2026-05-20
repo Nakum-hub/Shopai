@@ -830,6 +830,7 @@ export function PreviewView() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
   const generateAttemptedRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -871,6 +872,11 @@ export function PreviewView() {
     generateAttemptedRef.current = false;
   }, [currentStorefront?.id]);
 
+  // Cleanup mounted ref on unmount
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const handleGenerate = useCallback(async () => {
     setIsGenerating(true);
     try {
@@ -882,9 +888,12 @@ export function PreviewView() {
         body: JSON.stringify({ businessProfile: profile }),
       });
 
+      if (!mountedRef.current) return;
+
       const data = await res.json();
 
       if (!res.ok || data.error) {
+        if (!mountedRef.current) return;
         toast({
           title: 'Generation Failed',
           description: data.error || 'Failed to generate website. Please try again.',
@@ -894,6 +903,7 @@ export function PreviewView() {
       }
 
       if (data.success && data.html) {
+        if (!mountedRef.current) return;
         setGeneratedHtml(data.html);
 
         // Also update the storefront if it exists
@@ -929,13 +939,14 @@ export function PreviewView() {
         });
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       toast({
         title: 'Generation Failed',
         description: err instanceof Error ? err.message : 'An unexpected error occurred.',
         variant: 'destructive',
       });
     } finally {
-      setIsGenerating(false);
+      if (mountedRef.current) setIsGenerating(false);
     }
   }, [businessProfile, currentStorefront, updateStorefront]);
 

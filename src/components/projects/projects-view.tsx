@@ -823,12 +823,12 @@ export function ProjectsView() {
   // IDs of mock storefronts (cannot be deleted via API)
   const mockIds = new Set(MOCK_STOREFRONTS.map((s) => s.id));
 
-  // Fetch real storefronts from the API on mount
-  const fetchStorefronts = useCallback(async () => {
+  // Fetch real storefronts from the API (stable callback for reuse)
+  const fetchStorefronts = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/storefronts');
+      const res = await fetch('/api/storefronts', signal ? { signal } : undefined);
       if (!res.ok) {
         throw new Error(`Failed to fetch storefronts (status ${res.status})`);
       }
@@ -845,6 +845,7 @@ export function ProjectsView() {
         setShowingMockOnly(true);
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('[PROJECTS_VIEW] Failed to fetch storefronts:', err);
       setError(err instanceof Error ? err.message : 'Failed to load storefronts');
       // Fallback to mock data on error
@@ -855,8 +856,11 @@ export function ProjectsView() {
     }
   }, []);
 
+  // Fetch on mount with AbortController
   useEffect(() => {
-    fetchStorefronts();
+    const controller = new AbortController();
+    fetchStorefronts(controller.signal);
+    return () => controller.abort();
   }, [fetchStorefronts]);
 
   // Combined list is already stored in `storefronts` (real + mock)
@@ -1002,7 +1006,7 @@ export function ProjectsView() {
               variant="ghost"
               size="sm"
               className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-              onClick={fetchStorefronts}
+              onClick={() => fetchStorefronts()}
             >
               Retry
             </Button>

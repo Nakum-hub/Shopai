@@ -278,6 +278,7 @@ function VoiceInputSection() {
   const logsEndRef = useRef<HTMLDivElement>(null);
   const simTimerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const socketRef = useRef<Socket | null>(null);
+  const mountedRef = useRef(true);
   const generationCompletedRef = useRef(false);
   const { toast: showToast } = useToast();
   const sessionIdRef = useRef<string>(`builder-${Date.now()}`);
@@ -333,7 +334,7 @@ function VoiceInputSection() {
       setSimStage('ready');
       setSelectedTemplate(null); // consume
     }
-  }, [selectedTemplate]);
+  }, [selectedTemplate, setBusinessProfile, addChatMessage, setSimStage, setSelectedTemplate]);
 
   useEffect(() => {
     // When a design component is selected from the Design Library
@@ -348,7 +349,7 @@ function VoiceInputSection() {
       setShowTextInput(true);
       setSelectedDesignComponent(null); // consume
     }
-  }, [selectedDesignComponent]);
+  }, [selectedDesignComponent, addChatMessage, setSimStage, setShowTextInput, setSelectedDesignComponent]);
 
   useEffect(() => {
     // When a design theme is selected from the Design Library
@@ -363,7 +364,7 @@ function VoiceInputSection() {
       setShowTextInput(true);
       setSelectedDesignTheme(null); // consume
     }
-  }, [selectedDesignTheme]);
+  }, [selectedDesignTheme, addChatMessage, setSimStage, setShowTextInput, setSelectedDesignTheme]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -374,7 +375,9 @@ function VoiceInputSection() {
 
   // Cleanup timers, WebSocket, and media recorder on unmount
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       simTimerRef.current.forEach(clearTimeout);
       if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
       if (socketRef.current?.connected) {
@@ -604,9 +607,10 @@ function VoiceInputSection() {
 
       // Try to extract business profile from conversation after enough messages
       // Only attempt if no profile has been set yet (voice flow sets it directly)
-      if (!useAppStore.getState().businessProfile && result.messageCount >= 2) {
+      if (!useAppStore.getState().businessProfile && result.messageCount >= 2 && mountedRef.current) {
         simTimerRef.current.push(
           setTimeout(async () => {
+            if (!mountedRef.current) return;
             try {
               const allMessages = useAppStore.getState().chatMessages;
               const profileRes = await fetch('/api/extract-profile', {
@@ -615,6 +619,7 @@ function VoiceInputSection() {
                 body: JSON.stringify({ messages: allMessages }),
               });
               const profileData = await profileRes.json();
+              if (!mountedRef.current) return;
               if (profileData.success && profileData.businessProfile) {
                 setBusinessProfile(profileData.businessProfile);
                 setSimStage('ready');
@@ -622,8 +627,8 @@ function VoiceInputSection() {
                 throw new Error(profileData.error || 'Extraction failed');
               }
             } catch (err) {
+              if (!mountedRef.current) return;
               console.error('[ExtractProfile] Failed:', err);
-              // Don't set mock profile — let user continue chatting
             }
           }, 1200)
         );
@@ -632,10 +637,11 @@ function VoiceInputSection() {
       // Send one more automated follow-up after a delay
       simTimerRef.current.push(
         setTimeout(async () => {
+          if (!mountedRef.current) return;
           const followUp = await callChatAPI(
             'Tell me more about what you can help me with for my website.'
           );
-          if (!followUp) return;
+          if (!followUp || !mountedRef.current) return;
 
           addChatMessage({
             id: `msg-${Date.now()}`,
@@ -877,7 +883,7 @@ function VoiceInputSection() {
     });
 
     // Extract business profile after enough messages via real API
-    if (result.messageCount >= 2 && !businessProfile) {
+    if (result.messageCount >= 2 && !businessProfile && mountedRef.current) {
       (async () => {
         try {
           const allMessages = useAppStore.getState().chatMessages;
@@ -887,6 +893,7 @@ function VoiceInputSection() {
             body: JSON.stringify({ messages: allMessages }),
           });
           const profileData = await profileRes.json();
+          if (!mountedRef.current) return;
           if (profileData.success && profileData.businessProfile) {
             setBusinessProfile(profileData.businessProfile);
             setSimStage('ready');
@@ -894,8 +901,8 @@ function VoiceInputSection() {
             throw new Error(profileData.error || 'Extraction failed');
           }
         } catch (err) {
+          if (!mountedRef.current) return;
           console.error('[ExtractProfile] Failed:', err);
-          // Don't use mock — let user continue chatting for more context
         }
       })();
     }

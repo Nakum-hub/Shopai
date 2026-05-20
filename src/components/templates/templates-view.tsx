@@ -236,16 +236,19 @@ export function TemplatesView() {
   }, []);
 
   const handleRetry = useCallback(() => {
+    let cancelled = false;
     setLoading(true);
     setError(null);
     setTemplates([]);
     // Trigger a refetch by leveraging a state toggle trick
     fetch('/api/templates')
       .then((res) => {
+        if (cancelled) return;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data) => {
+        if (cancelled) return;
         const raw = data.templates as unknown[];
         if (Array.isArray(raw) && raw.length > 0) {
           const valid = raw.every(
@@ -274,10 +277,11 @@ export function TemplatesView() {
         }
       })
       .catch((err) => {
+        if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load templates');
         setTemplates(mockTemplates);
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!cancelled) setLoading(false); });
   }, []);
 
   // Featured template

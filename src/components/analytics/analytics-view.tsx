@@ -455,16 +455,16 @@ export function AnalyticsView() {
   const storefrontId = currentStorefront?.id;
   const days = dateRange === '7' ? 7 : dateRange === '30' ? 30 : 90;
 
-  // Fetch all data in parallel
-  const fetchAllData = useCallback(async () => {
+  // Fetch all data in parallel (stable callback for reuse in retry buttons)
+  const fetchAllData = useCallback(async (signal?: AbortSignal) => {
     if (!storefrontId) return;
     setLoading(true);
     setFetchError(null);
     try {
       const [analyticsRes, healthRes, insightsRes] = await Promise.all([
-        fetch(`/api/analytics?storefrontId=${encodeURIComponent(storefrontId)}&days=${days}`),
-        fetch(`/api/bi?storefrontId=${encodeURIComponent(storefrontId)}&mode=health`),
-        fetch(`/api/bi?storefrontId=${encodeURIComponent(storefrontId)}&mode=insights`),
+        fetch(`/api/analytics?storefrontId=${encodeURIComponent(storefrontId)}&days=${days}`, signal ? { signal } : undefined),
+        fetch(`/api/bi?storefrontId=${encodeURIComponent(storefrontId)}&mode=health`, signal ? { signal } : undefined),
+        fetch(`/api/bi?storefrontId=${encodeURIComponent(storefrontId)}&mode=insights`, signal ? { signal } : undefined),
       ]);
 
       if (!analyticsRes.ok) throw new Error(`Analytics failed (status ${analyticsRes.status})`);
@@ -481,6 +481,7 @@ export function AnalyticsView() {
       setHealthData(healthJson);
       setInsightsData(insightsJson);
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('[ANALYTICS_VIEW] Failed to fetch data:', err);
       setFetchError(err instanceof Error ? err.message : 'Failed to load analytics data');
       toast({
@@ -493,8 +494,11 @@ export function AnalyticsView() {
     }
   }, [storefrontId, days, toast]);
 
+  // Fetch on mount with AbortController
   useEffect(() => {
-    fetchAllData();
+    const controller = new AbortController();
+    fetchAllData(controller.signal);
+    return () => controller.abort();
   }, [fetchAllData]);
 
   // Derived data
@@ -566,7 +570,7 @@ export function AnalyticsView() {
             variant="ghost"
             size="sm"
             className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-            onClick={fetchAllData}
+            onClick={() => fetchAllData()}
           >
             <RotateCcw className="h-3.5 w-3.5 mr-1" />
             Retry
