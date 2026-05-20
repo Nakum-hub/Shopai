@@ -1,4 +1,45 @@
 ---
+Task ID: 4
+Agent: Main Agent
+Task: Harden SQLite database for production-grade resilience and document PostgreSQL migration path
+
+Work Log:
+- Audited all DB consumers: 8 API routes, business-intelligence.ts, semantic-memory.ts, generation-service
+- Rewrote src/lib/db.ts with:
+  - SQLite WAL mode (PRAGMA journal_mode=WAL) for concurrent read performance
+  - Optimized pragmas: busy_timeout=5000, cache_size=8MB, temp_store=MEMORY, mmap_size=256MB, synchronous=NORMAL
+  - withRetry() wrapper: exponential backoff for SQLITE_BUSY errors (3 retries, jitter)
+  - WriteQueue class: non-blocking batched write serialization (10 ops/batch, 50ms interval)
+  - batchWrite() helper for sequential write operations with retry
+  - dbHealthCheck() diagnostic endpoint (latency, WAL status, queue depth)
+- Updated prisma/schema.prisma:
+  - Added viewCount field to Storefront model
+  - Added 7 composite indexes for common query patterns (status+createdAt, category+status, sessionId+createdAt, etc.)
+  - Added businessName index for search, lastMessageAt for session queries, timestamp for log queries
+- Updated generation-service/index.ts:
+  - Added WAL mode + retry wrapper (identical to main app)
+  - Wrapped all DB writes (pipelineLog.create, pipelineExecution.create/update) in withRetry()
+  - Added resilient health endpoint with DB connectivity check
+- Updated health API to include database diagnostics (status, latency, WAL mode, queue size)
+- Created src/lib/database-architecture.ts:
+  - Complete documentation of SQLite hardening strategy
+  - Limitations table with mitigation for each scenario
+  - Full PostgreSQL + Redis migration guide with code examples
+  - Throughput estimates for current SQLite setup
+  - docker-compose.yml additions for PostgreSQL + Redis
+  - When-to-migrate checklist
+- Zero lint errors confirmed
+- Dev server running cleanly
+
+Stage Summary:
+- SQLite is now production-hardened with WAL mode, optimized pragmas, write queue, and retry logic
+- All DB writes are wrapped in retry protection against SQLITE_BUSY
+- 7 new composite indexes for common query patterns
+- Generation service uses identical resilient DB patterns
+- Health endpoint now includes database diagnostics
+- Complete PostgreSQL migration path documented with code examples and docker-compose config
+- Estimated throughput: ~500-1000 mixed ops/sec with caching
+---
 Task ID: 3
 Agent: Main Agent
 Task: Fix Docker/Nginx production stack — make docker-compose.yml fully functional

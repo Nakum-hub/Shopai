@@ -24,17 +24,21 @@ model Storefront {
   deploymentStatus String  @default("none")
   deploymentUrl   String?
   publishedAt     DateTime?
+  viewCount       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  analytics       StorefrontAnalytics[]
-  generationJobs  GenerationJob[]
+  analytics          StorefrontAnalytics[]
+  generationJobs     GenerationJob[]
   pipelineExecutions PipelineExecution[]
 
   @@index([status])
   @@index([category])
   @@index([createdAt])
   @@index([updatedAt])
+  @@index([status, createdAt])    // common: "find all published, sorted by date"
+  @@index([category, status])     // common: "find all restaurants that are ready"
+  @@index([businessName])         // search by name
 }
 
 // =============================================================================
@@ -42,19 +46,19 @@ model Storefront {
 // =============================================================================
 
 model StorefrontAnalytics {
-  id              String   @id @default(cuid())
-  storefrontId    String
-  totalViews      Int      @default(0)
-  uniqueVisitors  Int      @default(0)
-  avgDuration     Int      @default(0) // seconds
-  bounceRate      Float    @default(0)
-  seoScore        Int      @default(0)
-  performanceScore Int    @default(0)
-  accessibilityScore Int  @default(0)
-  date            String   // YYYY-MM-DD
-  createdAt       DateTime @default(now())
+  id                String   @id @default(cuid())
+  storefrontId      String
+  totalViews        Int      @default(0)
+  uniqueVisitors    Int      @default(0)
+  avgDuration       Int      @default(0) // seconds
+  bounceRate        Float    @default(0)
+  seoScore          Int      @default(0)
+  performanceScore  Int      @default(0)
+  accessibilityScore Int     @default(0)
+  date              String   // YYYY-MM-DD
+  createdAt         DateTime @default(now())
 
-  storefront      Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  storefront Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
 
   @@unique([storefrontId, date])
   @@index([storefrontId])
@@ -66,17 +70,17 @@ model StorefrontAnalytics {
 // =============================================================================
 
 model GenerationJob {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   storefrontId    String
-  status          String   @default("idle")
-  progress        Int      @default(0)
+  status          String    @default("idle")
+  progress        Int       @default(0)
   message         String?
   voiceTranscript String?
-  logs            String?  // JSON array of logs
-  startedAt       DateTime @default(now())
+  logs            String?   // JSON array of logs
+  startedAt       DateTime  @default(now())
   completedAt     DateTime?
 
-  storefront      Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
+  storefront Storefront @relation(fields: [storefrontId], references: [id], onDelete: Cascade)
 
   @@index([storefrontId])
   @@index([status])
@@ -87,29 +91,30 @@ model GenerationJob {
 // =============================================================================
 
 model PipelineExecution {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   storefrontId    String?
   sessionId       String
-  status          String   @default("pending") // pending, running, completed, failed, cancelled
+  status          String    @default("pending") // pending, running, completed, failed, cancelled
   currentStage    String
-  totalStages     Int      @default(9)
-  progress        Int      @default(0)
-  inputSnapshot   String?  // JSON: the business profile / prompt that triggered this run
-  outputHtml      String?  // final generated HTML
+  totalStages     Int       @default(9)
+  progress        Int       @default(0)
+  inputSnapshot   String?   // JSON: the business profile / prompt that triggered this run
+  outputHtml      String?   // final generated HTML
   validationScore Int?
   errorMessage    String?
-  startedAt       DateTime @default(now())
+  startedAt       DateTime  @default(now())
   completedAt     DateTime?
-  durationMs      Int?     // completion time in milliseconds
+  durationMs      Int?      // completion time in milliseconds
 
-  logs            PipelineLog[]
-
-  storefront      Storefront? @relation(fields: [storefrontId], references: [id], onDelete: SetNull)
+  logs       PipelineLog[]
+  storefront Storefront?    @relation(fields: [storefrontId], references: [id], onDelete: SetNull)
 
   @@index([sessionId])
   @@index([storefrontId])
   @@index([status])
   @@index([startedAt])
+  @@index([status, startedAt])    // common: "find failed executions, latest first"
+  @@index([storefrontId, status]) // common: "find completed executions for a storefront"
 }
 
 // =============================================================================
@@ -117,22 +122,24 @@ model PipelineExecution {
 // =============================================================================
 
 model PipelineLog {
-  id              String   @id @default(cuid())
-  executionId     String
-  stage           String   // processing_voice, understanding_business, etc.
-  level           String   @default("info") // info, success, warning, error
-  agent           String
-  message         String
-  detail          String?
-  inputTokens     Int?
-  outputTokens    Int?
-  durationMs      Int?
-  timestamp       DateTime @default(now())
+  id          String   @id @default(cuid())
+  executionId String
+  stage       String   // processing_voice, understanding_business, etc.
+  level       String   @default("info") // info, success, warning, error
+  agent       String
+  message     String
+  detail      String?
+  inputTokens Int?
+  outputTokens Int?
+  durationMs  Int?
+  timestamp   DateTime @default(now())
 
-  execution       PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  execution PipelineExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   @@index([executionId])
+  @@index([executionId, stage]) // common: "get logs for a specific stage"
   @@index([stage])
+  @@index([timestamp])
 }
 
 // =============================================================================
@@ -140,19 +147,20 @@ model PipelineLog {
 // =============================================================================
 
 model ConversationSession {
-  id              String   @id @default(cuid())
-  sessionId       String   @unique
+  id              String    @id @default(cuid())
+  sessionId       String    @unique
   storefrontId    String?
-  businessProfile String?  // JSON: extracted business profile
-  messageCount    Int      @default(0)
+  businessProfile String?   // JSON: extracted business profile
+  messageCount    Int       @default(0)
   lastMessageAt   DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  messages        ChatHistory[]
+  messages ChatHistory[]
 
   @@index([sessionId])
   @@index([storefrontId])
+  @@index([lastMessageAt]) // common: "find recent active sessions"
 }
 
 // =============================================================================
@@ -160,16 +168,17 @@ model ConversationSession {
 // =============================================================================
 
 model ChatHistory {
-  id              String   @id @default(cuid())
-  sessionId       String
-  session         ConversationSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
-  role            String   // user, assistant, system
-  content         String
-  metadata        String?  // JSON metadata
-  createdAt       DateTime @default(now())
+  id        String   @id @default(cuid())
+  sessionId String
+  session   ConversationSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  role      String   // user, assistant, system
+  content   String
+  metadata  String?  // JSON metadata
+  createdAt DateTime @default(now())
 
-  @@index([sessionId])
+  @@index([sessionId, createdAt]) // common: "get messages for a session in order"
   @@index([createdAt])
+  @@index([role])
 }
 
 // =============================================================================
@@ -177,18 +186,18 @@ model ChatHistory {
 // =============================================================================
 
 model Template {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  category        String   @default("other")
-  preview         String?  // CSS gradient string
-  sections        String?  // JSON sections config
-  style           String?  // JSON brand style
-  popular         Boolean  @default(false)
-  featured        Boolean  @default(false)
-  downloadCount   Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  category      String   @default("other")
+  preview       String?  // CSS gradient string
+  sections      String?  // JSON sections config
+  style         String?  // JSON brand style
+  popular       Boolean  @default(false)
+  featured      Boolean  @default(false)
+  downloadCount Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([category])
   @@index([popular])
@@ -200,16 +209,16 @@ model Template {
 // =============================================================================
 
 model SemanticMemory {
-  id          String   @id @default(cuid())
-  sessionId   String
-  category    String   // 'business_profile' | 'user_preference' | 'generation_insight' | 'conversation_fact'
-  key         String   // e.g., "business_name", "preferred_color", "generation_tip"
-  value       String   // the actual stored value
-  confidence  Float    @default(1.0) // 0.0 to 1.0
-  source      String   // 'voice' | 'chat' | 'generation' | 'system'
-  expiresAt   DateTime? // optional TTL
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String    @id @default(cuid())
+  sessionId  String
+  category   String    // 'business_profile' | 'user_preference' | 'generation_insight' | 'conversation_fact'
+  key        String    // e.g., "business_name", "preferred_color", "generation_tip"
+  value      String    // the actual stored value
+  confidence Float     @default(1.0) // 0.0 to 1.0
+  source     String    // 'voice' | 'chat' | 'generation' | 'system'
+  expiresAt  DateTime? // optional TTL
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@unique([sessionId, key])
   @@index([sessionId])

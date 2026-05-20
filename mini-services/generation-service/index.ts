@@ -3,7 +3,7 @@ import ZAI from "z-ai-web-dev-sdk";
 import { PrismaClient } from "@prisma/client";
 
 // =============================================================================
-// Database Connection
+// Database Connection (resilient with WAL mode)
 // =============================================================================
 
 const DATABASE_URL = process.env.DATABASE_URL || "file:/home/z/my-project/db/custom.db";
@@ -12,7 +12,57 @@ const prisma = new PrismaClient({
   datasources: {
     db: { url: DATABASE_URL },
   },
+  log: ["error"],
 });
+
+// Enable WAL mode for concurrent read performance
+async function enableWalMode() {
+  try {
+    await prisma.$executeRawUnsafe("PRAGMA journal_mode=WAL;");
+    await prisma.$executeRawUnsafe("PRAGMA busy_timeout=5000;");
+    await prisma.$executeRawUnsafe("PRAGMA synchronous=NORMAL;");
+    await prisma.$executeRawUnsafe("PRAGMA cache_size=-8000;");
+    await prisma.$executeRawUnsafe("PRAGMA temp_store=MEMORY;");
+    await prisma.$executeRawUnsafe("PRAGMA mmap_size=268435456;");
+    console.log("[DB] SQLite WAL mode enabled");
+  } catch (err) {
+    console.warn("[DB] Could not set SQLite pragmas:", err);
+  }
+}
+
+enableWalMode();
+
+// Retry wrapper for SQLITE_BUSY errors
+async function withRetry<T>(operation: () => Promise<T>, retries = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      lastError = error;
+      const isBusy =
+        error instanceof Error &&
+        (error.message.includes("SQLITE_BUSY") ||
+          error.message.includes("database is locked") ||
+          error.message.includes("database locked"));
+      if (!isBusy || attempt === retries) throw error;
+      const delay = Math.min(100 * Math.pow(2, attempt), 2000);
+      console.warn(`[DB] SQLITE_BUSY, retry ${attempt + 1}/${retries} in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
+// Health endpoint
+async function healthHandler(_req: any, res: any) {
+  try {
+    await prisma.$queryRawUnsafe("SELECT 1");
+    res.json({ status: "healthy", service: "generation-service", timestamp: new Date().toISOString() });
+  } catch {
+    res.status(503).json({ status: "unhealthy", service: "generation-service" });
+  }
+}
 
 // =============================================================================
 // Types (mirrored from the main project for standalone service use)
@@ -417,7 +467,7 @@ async function persistPipelineLog(
   durationMs?: number
 ) {
   try {
-    await prisma.pipelineLog.create({
+    await withRetry(() => prisma.pipelineLog.create({
       data: {
         executionId: ctx.executionId,
         stage,
@@ -429,7 +479,7 @@ async function persistPipelineLog(
         outputTokens,
         durationMs,
       },
-    });
+    }));
   } catch (err) {
     console.error(`[DB] Failed to persist pipeline log for stage ${stage}:`, err);
   }
@@ -932,20 +982,22 @@ async function runGenerationPipeline(
   // --- Create PipelineExecution record in DB ---
   let executionId: string;
   try {
-    const execution = await prisma.pipelineExecution.create({
-      data: {
-        sessionId,
-        storefrontId: storefrontId || null,
-        status: "running",
-        currentStage: "initializing",
-        totalStages: 9,
-        progress: 0,
-        inputSnapshot: JSON.stringify({
-          businessProfile,
-          voiceTranscript: voiceTranscript || null,
-        }),
-      },
-    });
+    const execution = await withRetry(() =>
+      prisma.pipelineExecution.create({
+        data: {
+          sessionId,
+          storefrontId: storefrontId || null,
+          status: "running",
+          currentStage: "initializing",
+          totalStages: 9,
+          progress: 0,
+          inputSnapshot: JSON.stringify({
+            businessProfile,
+            voiceTranscript: voiceTranscript || null,
+          }),
+        },
+      })
+    );
     executionId = execution.id;
     console.log(
       `[GenerationService] PipelineExecution created: ${executionId}`
@@ -1137,10 +1189,10 @@ async function updateExecutionStage(
   stage: string
 ): Promise<void> {
   try {
-    await prisma.pipelineExecution.update({
+    await withRetry(() => prisma.pipelineExecution.update({
       where: { id: ctx.executionId },
       data: { currentStage: stage },
-    });
+    }));
   } catch (err) {
     console.error(
       `[DB] Failed to update execution stage to ${stage}:`,
@@ -1156,7 +1208,7 @@ async function finalizeExecution(
   errorMessage?: string
 ): Promise<void> {
   try {
-    await prisma.pipelineExecution.update({
+    await withRetry(() => prisma.pipelineExecution.update({
       where: { id: ctx.executionId },
       data: {
         status,
@@ -1168,7 +1220,7 @@ async function finalizeExecution(
         durationMs,
         completedAt: new Date(),
       },
-    });
+    }));
     console.log(
       `[DB] PipelineExecution ${ctx.executionId} finalized as "${status}"`
     );
