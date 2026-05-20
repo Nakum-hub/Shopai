@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { validateInput, chatRequestSchema } from '@/lib/validation';
 import { rateLimit } from '@/lib/rate-limit';
 import { consolidateProfile, assembleBusinessProfile, recallByCategory } from '@/lib/semantic-memory';
+import { validateForLLM } from '@/lib/security';
 
 const SYSTEM_PROMPT = `You are StoreCraft AI, an intelligent assistant that helps small business owners create professional websites by understanding their business through conversation.
 
@@ -46,6 +47,32 @@ export async function POST(request: NextRequest) {
     const { message, sessionId } = validation.data;
     const sid = sessionId || 'default';
 
+    // --- Prompt Injection Protection ---
+    const llmValidation = validateForLLM(message);
+    if (llmValidation.risk >= 0.7) {
+      console.warn('[CHAT_SECURITY] Prompt injection blocked', {
+        sessionId: sid,
+        risk: llmValidation.risk,
+        warnings: llmValidation.warnings,
+      });
+      return NextResponse.json(
+        {
+          error: 'Input appears to contain instructions intended to manipulate AI behavior. Please provide legitimate business information.',
+        },
+        { status: 422 }
+      );
+    }
+
+    // Use sanitized text if moderate risk detected, otherwise use original
+    const safeMessage = llmValidation.risk >= 0.3 ? llmValidation.sanitized : message;
+    if (llmValidation.risk >= 0.3) {
+      console.warn('[CHAT_SECURITY] Prompt injection risk detected — using sanitized input', {
+        sessionId: sid,
+        risk: llmValidation.risk,
+        warnings: llmValidation.warnings,
+      });
+    }
+
     // --- Persistent Chat Memory ---
     // Load conversation history from DB
     let session = await db.conversationSession.findUnique({
@@ -69,17 +96,17 @@ export async function POST(request: NextRequest) {
       history = [{ role: 'assistant', content: SYSTEM_PROMPT }];
     }
 
-    // Add user message
-    history.push({ role: 'user', content: message });
+    // Add user message (using safe version)
+    history.push({ role: 'user', content: safeMessage });
 
     // Trim history (keep system prompt + last 20 messages)
     if (history.length > 22) {
       history = [history[0], ...history.slice(-20)];
     }
 
-    // Save user message to DB
+    // Save user message to DB (store sanitized version)
     await db.chatHistory.create({
-      data: { sessionId: sid, role: 'user', content: message },
+      data: { sessionId: sid, role: 'user', content: safeMessage },
     });
 
     // Update session metadata

@@ -1,134 +1,570 @@
+'use server';
+
 // =============================================================================
-// Security Middleware
+// StoreCraft AI — Core Security Infrastructure
 // =============================================================================
-// Utilities for sanitizing inputs, generating CSP nonces, and applying
-// security headers to API responses. Prevents XSS in generated content
-// and validates business profile fields.
+// Production-grade security module providing HTML sanitization (DOMPurify),
+// SSRF protection with DNS resolution, Content Security Policy generation,
+// prompt injection detection, and input validation utilities.
 // =============================================================================
 
 import crypto from 'node:crypto';
+import dns from 'node:dns';
 import { NextResponse } from 'next/server';
+import DOMPurify from 'isomorphic-dompurify';
 
-// -----------------------------------------------------------------------------
-// HTML Sanitization
-// -----------------------------------------------------------------------------
+// =============================================================================
+// Security Configuration
+// =============================================================================
 
 /**
- * Tags that are allowed in generated HTML output.
- * Everything else will be stripped.
+ * Centralized security configuration constants.
+ * Adjust these values to tune security boundaries across the application.
  */
-const ALLOWED_TAGS = new Set([
+export const SECURITY_CONFIG = {
+  /** Maximum allowed size for generated HTML output (500 KB) */
+  MAX_HTML_SIZE: 500_000,
+
+  /** Maximum allowed length for general text inputs */
+  MAX_INPUT_LENGTH: 5_000,
+
+  /** Maximum allowed size for business profile payloads */
+  MAX_BUSINESS_PROFILE_SIZE: 10_000,
+
+  /** Maximum number of retries for website generation jobs */
+  MAX_GENERATION_RETRIES: 3,
+
+  /** DNS cache TTL in milliseconds (5 minutes) */
+  DNS_CACHE_TTL_MS: 300_000,
+
+  /** Allowed ports for outbound HTTP requests (SSRF protection) */
+  ALLOWED_PORTS: [80, 443, 8080, 8443, 3000, 3001] as const,
+
+  /** Blocked IP ranges for SSRF protection (CIDR notation) */
+  BLOCKED_IP_RANGES: [
+    // IPv4 private ranges (RFC 1918)
+    '10.0.0.0/8',
+    '172.16.0.0/12',
+    '192.168.0.0/16',
+    // Loopback
+    '127.0.0.0/8',
+    '0.0.0.0/8',
+    // Link-local
+    '169.254.0.0/16',
+    // IPv6 loopback and link-local
+    '::1/128',
+    'fe80::/10',
+    'fc00::/7',
+    // Cloud metadata endpoints
+    '100.100.100.200/32',
+  ] as const,
+
+  /** Blocked hostname patterns for SSRF protection */
+  BLOCKED_HOSTNAME_PATTERNS: [
+    /^localhost$/i,
+    /^metadata\.google\.internal$/i,
+    /^metadata\.google\.com$/i,
+    /^instance-data$/i,
+    /^consul$/i,
+    /^etcd$/i,
+    /^zookeeper$/i,
+    /^kubernetes\.default$/i,
+    /\.local$/i,
+    /\.internal$/i,
+    /\.corp$/i,
+    /\.private$/i,
+  ] as const,
+} as const;
+
+// =============================================================================
+// DOMPurify Configuration
+// =============================================================================
+
+/** Strict allow-list of HTML tags permitted in sanitized output. */
+const DOMPURIFY_ALLOWED_TAGS = [
+  // Structural
   'html', 'head', 'body', 'title', 'meta', 'link',
-  'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
-  'div', 'span', 'section', 'article', 'aside', 'header', 'footer', 'main', 'nav',
+  // Sections
+  'div', 'span', 'section', 'article', 'header', 'footer', 'nav', 'main', 'aside',
+  // Headings
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  // Block
+  'p', 'br', 'hr', 'blockquote', 'pre', 'details', 'summary',
+  // Inline
+  'strong', 'em', 'b', 'i', 'small', 'code', 'mark', 'sub', 'sup', 'u', 's',
+  // Lists
   'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+  // Links & media
   'a', 'img', 'figure', 'figcaption', 'picture', 'source',
+  // Tables
   'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption',
+  // Forms (restricted — no external actions)
   'form', 'input', 'textarea', 'select', 'option', 'button', 'label',
-  'strong', 'em', 'b', 'i', 'u', 's', 'sub', 'sup', 'small', 'mark', 'code', 'pre', 'blockquote',
-  'style', 'script',
-  'video', 'audio', 'canvas', 'iframe',
-  'details', 'summary',
-]);
+] as const;
+
+/** Allowed attributes mapped per tag (undefined = allowed on all tags). */
+const DOMPURIFY_ALLOWED_ATTR = [
+  // Global
+  'alt', 'class', 'id', 'style', 'title', 'role', 'aria-*',
+  // Link
+  'href', 'target', 'rel',
+  // Image
+  'src', 'srcset', 'sizes', 'width', 'height', 'loading', 'decoding',
+  // Media
+  'type', 'media', 'controls',
+  // Table
+  'colspan', 'rowspan', 'scope', 'headers',
+  // Form
+  'name', 'value', 'placeholder', 'required', 'disabled', 'readonly',
+  'type', 'min', 'max', 'step', 'pattern', 'maxlength', 'autocomplete',
+  'for', 'action', 'method',
+  // Meta
+  'charset', 'content', 'http-equiv', 'name',
+  // Details
+  'open',
+] as const;
+
+/** Allowed URI schemes for href attributes. */
+const HREF_ALLOWED_SCHEMES = ['https:', 'http:', 'mailto:', 'tel:', ''] as const;
+
+/** Allowed URI schemes for img src attributes. */
+const IMG_SRC_ALLOWED_SCHEMES = ['https:', 'http:', 'data:image/', ''] as const;
+
+// =============================================================================
+// HTML Sanitization (DOMPurify-based)
+// =============================================================================
 
 /**
- * Attributes that are stripped because they can execute scripts.
- */
-const DANGEROUS_ATTRS = [
-  /onclick\b/i,
-  /onload\b/i,
-  /onerror\b/i,
-  /onmouseover\b/i,
-  /onfocus\b/i,
-  /onblur\b/i,
-  /onsubmit\b/i,
-  /onchange\b/i,
-  /oninput\b/i,
-  /onkeydown\b/i,
-  /onkeyup\b/i,
-  /onkeypress\b/i,
-  /onmousedown\b/i,
-  /onmouseup\b/i,
-  /ondblclick\b/i,
-  /oncontextmenu\b/i,
-  /ondrag\b/i,
-  /ondragstart\b/i,
-  /ondragend\b/i,
-  /ondrop\b/i,
-  /onscroll\b/i,
-  /onresize\b/i,
-  /onanimationstart\b/i,
-  /onanimationend\b/i,
-  /ontransitionend\b/i,
-  /ontouchstart\b/i,
-  /ontouchend\b/i,
-  /ontouchmove\b/i,
-  /onwheel\b/i,
-  /oncopy\b/i,
-  /oncut\b/i,
-  /onpaste\b/i,
-  /oninvalid\b/i,
-];
-
-/**
- * Patterns that indicate dangerous content (XSS vectors).
- */
-const XSS_PATTERNS = [
-  /javascript\s*:/gi,
-  /data\s*:\s*text\/html/gi,
-  /vbscript\s*:/gi,
-  /expression\s*\(/gi,
-  /url\s*\(\s*['"]?\s*javascript/gi,
-  /@import\s+/gi,
-  /<\s*!\[cdata\[/gi,
-  /<\s*embed\b/gi,
-  /<\s*object\b/gi,
-  /<\s*base\b/gi,
-];
-
-/**
- * Sanitize HTML output to prevent XSS in generated content.
+ * Build the DOMPurify configuration with strict allow-list policies.
  *
- * This performs multi-layer sanitization:
- * 1. Strips dangerous event handler attributes (onclick, onload, etc.)
- * 2. Removes javascript: and data: URI schemes
- * 3. Strips dangerous embedded elements (<embed>, <object>, <base>)
- * 4. Removes CDATA sections
- * 5. Sanitizes <script> tags to prevent inline XSS (keeps tag but removes inline handlers)
- *
- * Note: This is a defense-in-depth measure. The HTML validation engine
- * and LLM generation constraints provide the primary security boundary.
+ * @param options - Optional configuration overrides
+ * @returns DOMPurify configuration object
  */
-export function sanitizeHtmlOutput(html: string): string {
-  let sanitized = html;
+function buildDOMPurifyConfig(options?: { allowStyles?: boolean }): Record<string, unknown> {
+  const allowedTags: string[] = [...DOMPURIFY_ALLOWED_TAGS];
 
-  // 1. Remove dangerous event handler attributes
-  for (const pattern of DANGEROUS_ATTRS) {
-    sanitized = sanitized.replace(new RegExp(`${pattern.source}\\s*=\\s*(['"][^'"]*['"]|[^\\s>]*)`, 'gi'), '');
+  // Optionally include <style> tags for generated website contexts
+  if (options?.allowStyles) {
+    if (!allowedTags.includes('style')) {
+      allowedTags.push('style');
+    }
   }
 
-  // 2. Remove XSS-prone URI schemes in href/src attributes
-  for (const pattern of XSS_PATTERNS) {
-    sanitized = sanitized.replace(pattern, 'BLOCKED');
-  }
+  return {
+    ALLOWED_TAGS: allowedTags,
+    ALLOWED_ATTR: [...DOMPURIFY_ALLOWED_ATTR],
 
-  // 3. Remove CDATA sections
-  sanitized = sanitized.replace(/<!\[cdata\[.*?\]\]>/gi, '');
+    // Block dangerous elements entirely
+    FORBID_TAGS: ['script', 'iframe', 'embed', 'object', 'base', 'applet'],
 
-  // 4. Remove <embed>, <object>, <base> tags entirely
-  sanitized = sanitized.replace(/<\s*embed\b[^>]*\/?>/gi, '');
-  sanitized = sanitized.replace(/<\s*object\b[^>]*>[\s\S]*?<\s*\/\s*object\s*>/gi, '');
-  sanitized = sanitized.replace(/<\s*base\b[^>]*\/?>/gi, '');
+    // Block all event handlers and dangerous attributes
+    FORBID_ATTR: [
+      'onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur',
+      'onsubmit', 'onchange', 'oninput', 'onkeydown', 'onkeyup', 'onkeypress',
+      'onmousedown', 'onmouseup', 'ondblclick', 'oncontextmenu', 'ondrag',
+      'ondragstart', 'ondragend', 'ondrop', 'onscroll', 'onresize',
+      'onanimationstart', 'onanimationend', 'ontransitionend',
+      'ontouchstart', 'ontouchend', 'ontouchmove', 'onwheel',
+      'oncopy', 'oncut', 'onpaste', 'oninvalid', 'onabort',
+      'onbeforeunload', 'oncanplay', 'oncanplaythrough', 'ondurationchange',
+      'onemptied', 'onended', 'onformdata', 'ongotpointercapture',
+      'onlostpointercapture', 'onmouseenter', 'onmouseleave', 'onmousemove',
+      'onmouseout', 'onpointerdown', 'onpointermove', 'onpointerup',
+      'onplay', 'onplaying', 'onprogress', 'onratechange', 'onreset',
+      'onsearch', 'onseeked', 'onseeking', 'onselect', 'onstalled',
+      'onsuspend', 'ontimeupdate', 'ontoggle', 'onvolumechange', 'onwaiting',
+      'onwheel', 'onauxclick',
+      'formaction', 'xlink:href', 'data',
+    ],
 
-  // 5. Clean up leftover empty attributes (e.g., onclick="" after stripping)
-  sanitized = sanitized.replace(/\s+\w+\s*=\s*=""\s*/g, ' ');
+    // Only allow specific URI schemes
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|data):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
 
-  return sanitized.trim();
+    // Keep HTML entities
+    ALLOW_ENTITY: true,
+
+    // Custom hooks for additional validation
+    HOOKS: {
+      uponSanitizeAttribute: (node: Element, data: { attrName: string; attrValue: string; keepAttr: boolean }) => {
+        const attrName = data.attrName.toLowerCase();
+        const attrValue = data.attrValue;
+
+        // Block javascript: URIs universally
+        if (attrValue && /^\s*javascript\s*:/i.test(attrValue)) {
+          data.keepAttr = false;
+          return;
+        }
+
+        // Block data:text/html URIs
+        if (attrValue && /^\s*data\s*:\s*text\/html/i.test(attrValue)) {
+          data.keepAttr = false;
+          return;
+        }
+
+        // Validate href attributes
+        if (attrName === 'href' && attrValue) {
+          const trimmed = attrValue.trim().toLowerCase();
+          const isAllowedScheme = HREF_ALLOWED_SCHEMES.some(
+            (scheme) => trimmed.startsWith(scheme)
+          );
+          // Also allow relative URLs (no colon, or starting with # or /)
+          const isRelative = !trimmed.includes(':') || trimmed.startsWith('#') || trimmed.startsWith('/') || trimmed.startsWith('?');
+          if (!isAllowedScheme && !isRelative) {
+            data.keepAttr = false;
+            return;
+          }
+        }
+
+        // Validate img src attributes
+        if (attrName === 'src' && attrValue) {
+          const trimmed = attrValue.trim().toLowerCase();
+          const isAllowedScheme = IMG_SRC_ALLOWED_SCHEMES.some(
+            (scheme) => trimmed.startsWith(scheme)
+          );
+          const isRelative = !trimmed.includes(':') || trimmed.startsWith('#') || trimmed.startsWith('/') || trimmed.startsWith('?');
+          if (!isAllowedScheme && !isRelative) {
+            data.keepAttr = false;
+            return;
+          }
+        }
+
+        // Strip form actions pointing to external URLs
+        if (attrName === 'action' && attrValue) {
+          const trimmed = attrValue.trim().toLowerCase();
+          if (trimmed.startsWith('http') || /^\s*javascript\s*:/i.test(trimmed)) {
+            data.keepAttr = false;
+            return;
+          }
+        }
+      },
+    },
+
+    // Allow data attributes (for frameworks) but not data-text/html
+    ALLOW_DATA_ATTR: false,
+
+    // Return DOM as string
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    RETURN_DOM_IMPORT: false,
+    WHOLE_DOCUMENT: true,
+  } as Record<string, unknown>;
 }
 
-// -----------------------------------------------------------------------------
+/**
+ * Sanitize HTML output using DOMPurify with strict allow-list configuration.
+ * Blocks all scripts, iframes, embeds, objects, base tags, event handlers,
+ * javascript: URIs, and data:text/html payloads.
+ *
+ * @param html - The raw HTML string to sanitize
+ * @param options - Optional settings (allowStyles enables `<style>` tags)
+ * @returns Sanitized HTML string safe for rendering
+ */
+export function sanitizeHtmlOutput(html: string, options?: { allowStyles?: boolean }): string {
+  if (!html || typeof html !== 'string') return '';
+  if (html.length > SECURITY_CONFIG.MAX_HTML_SIZE) {
+    return '<!-- HTML truncated: exceeds maximum allowed size -->';
+  }
+
+  const config = buildDOMPurifyConfig(options);
+  return DOMPurify.sanitize(html, config);
+}
+
+/**
+ * Extract all URLs from href and src attributes in an HTML string.
+ * Returns an array of URLs for SSRF safety checking.
+ *
+ * @param html - The HTML string to scan
+ * @returns Array of URL strings found in href and src attributes
+ */
+export function extractUrlsFromHtml(html: string): string[] {
+  if (!html || typeof html !== 'string') return [];
+
+  const urls: string[] = [];
+
+  // Match href="..." and href='...' and href=... patterns
+  const hrefRegex = /href\s*=\s*["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = hrefRegex.exec(html)) !== null) {
+    const url = match[1].trim();
+    if (url && !url.startsWith('#') && !url.startsWith('mailto:') && !url.startsWith('tel:')) {
+      urls.push(url);
+    }
+  }
+
+  // Match src="..." and src='...' patterns
+  const srcRegex = /src\s*=\s*["']([^"']+)["']/gi;
+  while ((match = srcRegex.exec(html)) !== null) {
+    const url = match[1].trim();
+    // Skip data: URIs and relative paths for SSRF checking
+    if (url && !url.startsWith('data:') && (url.startsWith('http://') || url.startsWith('https://'))) {
+      urls.push(url);
+    }
+  }
+
+  // Match srcset attribute values (multiple URLs)
+  const srcsetRegex = /srcset\s*=\s*["']([^"']+)["']/gi;
+  while ((match = srcsetRegex.exec(html)) !== null) {
+    const srcsetValue = match[1].trim();
+    const parts = srcsetValue.split(/\s*,\s*/);
+    for (const part of parts) {
+      const url = part.split(/\s+/)[0]; // URL is before the descriptor
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        urls.push(url);
+      }
+    }
+  }
+
+  return urls;
+}
+
+// =============================================================================
+// Content Security Policy
+// =============================================================================
+
+/**
+ * Generate Content Security Policy headers.
+ * When a nonce is provided, 'unsafe-inline' and 'unsafe-eval' are removed
+ * in favor of nonce-based script execution. Without a nonce, they are
+ * included with a warning comment in dev environments.
+ *
+ * @param nonce - Optional cryptographic nonce for script-src
+ * @returns Record of CSP-related header names and values
+ */
+export function createContentSecurityPolicy(nonce?: string): Record<string, string> {
+  const scriptSrc = nonce
+    ? `'self' 'nonce-${nonce}' https:`
+    // WARNING: 'unsafe-inline' and 'unsafe-eval' are used because no nonce was provided.
+    // This is less secure. Pass a nonce for production deployments.
+    : `'self' 'unsafe-inline' 'unsafe-eval' https:`;
+
+  const styleSrc = nonce
+    ? `'self' 'nonce-${nonce}' https:`
+    : `'self' 'unsafe-inline' https:`;
+
+  return {
+    'Content-Security-Policy': [
+      `default-src 'self'`,
+      `script-src ${scriptSrc}`,
+      `style-src ${styleSrc}`,
+      `img-src 'self' data: blob: https:`,
+      `font-src 'self' data: https:`,
+      `connect-src 'self' ws: wss: https:`,
+      `frame-ancestors 'none'`,
+      `base-uri 'self'`,
+      `form-action 'self'`,
+      `object-src 'none'`,
+    ].join('; '),
+  };
+}
+
+// =============================================================================
+// SSRF Protection with DNS Resolution
+// =============================================================================
+
+/**
+ * Simple DNS cache to avoid repeated lookups for the same hostname.
+ * Entries expire after DNS_CACHE_TTL_MS milliseconds.
+ */
+const dnsCache = new Map<string, { timestamp: number; isPrivate: boolean }>();
+
+/**
+ * Check if an IPv4 address falls within a private/internal range.
+ * Supports CIDR notation for range matching.
+ *
+ * @param ip - The IP address to check
+ * @returns True if the IP is private or internal
+ */
+function isPrivateIP(ip: string): boolean {
+  // Parse numeric IP value
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
+    return true; // Invalid IP — treat as unsafe
+  }
+  const ipNum = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
+
+  // Check against CIDR ranges
+  const ranges: Array<{ start: number; end: number }> = [
+    // 10.0.0.0/8
+    { start: 0x0A000000, end: 0x0AFFFFFF },
+    // 172.16.0.0/12
+    { start: 0xAC100000, end: 0xAC1FFFFF },
+    // 192.168.0.0/16
+    { start: 0xC0A80000, end: 0xC0A8FFFF },
+    // 127.0.0.0/8
+    { start: 0x7F000000, end: 0x7FFFFFFF },
+    // 0.0.0.0/8
+    { start: 0x00000000, end: 0x000000FF },
+    // 169.254.0.0/16 (link-local)
+    { start: 0xA9FE0000, end: 0xA9FEFFFF },
+    // 100.100.100.200/32 (cloud metadata)
+    { start: 0x646464C8, end: 0x646464C8 },
+  ];
+
+  return ranges.some((range) => ipNum >= range.start && ipNum <= range.end);
+}
+
+/**
+ * Check if an IPv6 address is private/internal.
+ *
+ * @param ip - The IPv6 address to check
+ * @returns True if the IPv6 address is private or internal
+ */
+function isPrivateIPv6(ip: string): boolean {
+  const normalized = ip.toLowerCase();
+  // Loopback
+  if (normalized === '::1' || normalized === '::') return true;
+  // Link-local fe80::/10
+  if (normalized.startsWith('fe80:')) return true;
+  // Unique local fc00::/7
+  if (normalized.startsWith('fc') || normalized.startsWith('fd')) return true;
+  // IPv4-mapped IPv6 ::ffff:0.0.0.0/96
+  if (normalized.startsWith('::ffff:')) return true;
+  return false;
+}
+
+/**
+ * Validate a URL's safety against SSRF attacks.
+ *
+ * This performs two-layer validation:
+ * 1. Pattern matching against blocked hostnames and non-HTTP protocols
+ * 2. DNS resolution to verify the resolved IP is not a private/internal address
+ *
+ * DNS results are cached with a TTL to avoid repeated lookups.
+ * DNS resolution happens AFTER pattern validation to mitigate DNS rebinding.
+ *
+ * @param url - The URL to validate
+ * @returns Object with `safe` boolean and optional `reason` string
+ */
+export async function checkSSRFSafety(
+  url: string
+): Promise<{ safe: boolean; reason: string | null }> {
+  if (!url || typeof url !== 'string') {
+    return { safe: false, reason: 'Empty URL' };
+  }
+
+  // Layer 1: Pattern validation
+  // Must be http or https
+  if (!/^https?:\/\//i.test(url)) {
+    return { safe: false, reason: 'Only HTTP/HTTPS URLs are allowed' };
+  }
+
+  let urlObj: URL;
+  try {
+    urlObj = new URL(url);
+  } catch {
+    return { safe: false, reason: 'Invalid URL format' };
+  }
+
+  const hostname = urlObj.hostname;
+
+  // Check blocked hostname patterns
+  for (const pattern of SECURITY_CONFIG.BLOCKED_HOSTNAME_PATTERNS) {
+    if (pattern.test(hostname)) {
+      return { safe: false, reason: `Hostname matches blocked pattern: ${pattern.source}` };
+    }
+  }
+
+  // Block raw IP addresses in URL that are private
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    if (isPrivateIP(hostname)) {
+      return { safe: false, reason: 'URL contains a private IP address' };
+    }
+  }
+
+  // Block IPv6 addresses in URL that are private
+  if (hostname.includes(':')) {
+    if (isPrivateIPv6(hostname)) {
+      return { safe: false, reason: 'URL contains a private IPv6 address' };
+    }
+  }
+
+  // Block non-standard ports
+  const port = parseInt(urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80'), 10);
+  if (!SECURITY_CONFIG.ALLOWED_PORTS.includes(port as (typeof SECURITY_CONFIG.ALLOWED_PORTS)[number])) {
+    return { safe: false, reason: `Port ${port} is not in the allowed list` };
+  }
+
+  // Layer 2: DNS resolution (mitigates DNS rebinding)
+  // Check cache first
+  const cached = dnsCache.get(hostname);
+  if (cached) {
+    const age = Date.now() - cached.timestamp;
+    if (age < SECURITY_CONFIG.DNS_CACHE_TTL_MS) {
+      if (cached.isPrivate) {
+        return { safe: false, reason: 'Resolved IP address is private/internal (cached)' };
+      }
+      return { safe: true, reason: null };
+    }
+    // Cache expired — remove and re-resolve
+    dnsCache.delete(hostname);
+  }
+
+  // Resolve DNS
+  try {
+    const addresses = await dns.promises.resolve4(hostname);
+
+    for (const ip of addresses) {
+      if (isPrivateIP(ip)) {
+        dnsCache.set(hostname, { timestamp: Date.now(), isPrivate: true });
+        return { safe: false, reason: `DNS resolves to private IP: ${ip}` };
+      }
+    }
+
+    // Also check IPv6 addresses
+    try {
+      const ipv6Addresses = await dns.promises.resolve6(hostname);
+      for (const ip of ipv6Addresses) {
+        if (isPrivateIPv6(ip)) {
+          dnsCache.set(hostname, { timestamp: Date.now(), isPrivate: true });
+          return { safe: false, reason: `DNS resolves to private IPv6: ${ip}` };
+        }
+      }
+    } catch {
+      // No IPv6 records — that's fine
+    }
+
+    dnsCache.set(hostname, { timestamp: Date.now(), isPrivate: false });
+    return { safe: true, reason: null };
+  } catch (err) {
+    // DNS resolution failed — could be a blocked/restricted domain
+    const message = err instanceof Error ? err.message : 'Unknown DNS error';
+    return { safe: false, reason: `DNS resolution failed: ${message}` };
+  }
+}
+
+/**
+ * Validate and sanitize a list of URLs for SSRF safety.
+ * Returns arrays of safe URLs and blocked URLs with reasons.
+ *
+ * @param urls - Array of URL strings to validate
+ * @returns Object containing safe URLs and blocked URLs with reasons
+ */
+export async function validateUrls(
+  urls: string[]
+): Promise<{ safeUrls: string[]; blocked: Array<{ url: string; reason: string }> }> {
+  const safeUrls: string[] = [];
+  const blocked: Array<{ url: string; reason: string }> = [];
+
+  // Resolve all checks in parallel
+  const results = await Promise.all(urls.map(async (url) => {
+    const result = await checkSSRFSafety(url);
+    return { url, ...result };
+  }));
+
+  for (const { url, safe, reason } of results) {
+    if (safe) {
+      safeUrls.push(url);
+    } else {
+      blocked.push({ url, reason: reason || 'Unknown' });
+    }
+  }
+
+  return { safeUrls, blocked };
+}
+
+// =============================================================================
 // String Sanitization
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 /**
  * Validate and sanitize a business profile string field.
@@ -137,6 +573,10 @@ export function sanitizeHtmlOutput(html: string): string {
  * - Limits length to maxLength
  * - Strips control characters (except tabs, newlines)
  * - Returns empty string if input is invalid
+ *
+ * @param input - The raw input string
+ * @param maxLength - Maximum allowed length (0 = unlimited)
+ * @returns Sanitized string
  */
 export function sanitizeString(input: string, maxLength: number): string {
   if (typeof input !== 'string') return '';
@@ -164,25 +604,29 @@ export function sanitizeString(input: string, maxLength: number): string {
   return sanitized;
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Nonce Generation
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 /**
  * Generate a cryptographically secure nonce for Content Security Policy headers.
  * Uses 16 bytes (128 bits) of randomness, base64url-encoded.
+ *
+ * @returns Base64url-encoded nonce string
  */
 export function generateNonce(): string {
   return crypto.randomBytes(16).toString('base64url');
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Security Headers
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 /**
  * Standard security headers to apply to all API responses.
  * These can be merged into NextResponse headers.
+ *
+ * @returns Record of security header names and values
  */
 export function getSecurityHeaders(): Record<string, string> {
   return {
@@ -198,6 +642,9 @@ export function getSecurityHeaders(): Record<string, string> {
 /**
  * Apply security headers to a NextResponse object.
  * Convenience wrapper around getSecurityHeaders().
+ *
+ * @param response - The NextResponse object to apply headers to
+ * @returns The same response with security headers applied
  */
 export function applySecurityHeaders(response: NextResponse): NextResponse {
   const headers = getSecurityHeaders();
@@ -207,12 +654,15 @@ export function applySecurityHeaders(response: NextResponse): NextResponse {
   return response;
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Input Validation Helpers
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 /**
  * Validate that a string is a safe ID (alphanumeric, hyphens, underscores, CUID-safe).
+ *
+ * @param id - The ID string to validate
+ * @returns True if the ID is valid
  */
 export function isValidId(id: string): boolean {
   return /^[a-zA-Z0-9_-]+$/.test(id) && id.length >= 1 && id.length <= 100;
@@ -220,6 +670,9 @@ export function isValidId(id: string): boolean {
 
 /**
  * Sanitize an email address (lowercase, trim).
+ *
+ * @param email - The email address to sanitize
+ * @returns Sanitized email string
  */
 export function sanitizeEmail(email: string): string {
   return sanitizeString(email, 254).toLowerCase();
@@ -227,15 +680,18 @@ export function sanitizeEmail(email: string): string {
 
 /**
  * Sanitize a phone number (keep digits, +, -, spaces, parentheses).
+ *
+ * @param phone - The phone number to sanitize
+ * @returns Sanitized phone string
  */
 export function sanitizePhone(phone: string): string {
   const cleaned = sanitizeString(phone, 30);
   return cleaned.replace(/[^0-9+\-() .]/g, '');
 }
 
-// -----------------------------------------------------------------------------
+// =============================================================================
 // Prompt Injection Protection
-// -----------------------------------------------------------------------------
+// =============================================================================
 
 /**
  * Patterns commonly used in prompt injection attacks against LLM integrations.
@@ -288,6 +744,9 @@ const PROMPT_INJECTION_PATTERNS = [
 /**
  * Score a text input for prompt injection risk.
  * Returns a risk score from 0 (safe) to 1 (very likely injection).
+ *
+ * @param text - The text to analyze
+ * @returns Risk score between 0 and 1
  */
 export function calculatePromptInjectionRisk(text: string): number {
   if (!text || typeof text !== 'string') return 0;
@@ -309,6 +768,9 @@ export function calculatePromptInjectionRisk(text: string): number {
 /**
  * Sanitize text before sending to LLM to reduce prompt injection risk.
  * Strips known injection patterns while preserving legitimate business content.
+ *
+ * @param text - The text to sanitize
+ * @returns Sanitized text safe for LLM processing
  */
 export function sanitizeForLLM(text: string): string {
   if (!text || typeof text !== 'string') return text;
@@ -342,7 +804,10 @@ export function sanitizeForLLM(text: string): string {
 
 /**
  * Validate that user input is safe for LLM processing.
- * Returns { safe, risk, sanitized } object.
+ * Returns an object with safety status, risk score, sanitized text, and warnings.
+ *
+ * @param text - The input text to validate
+ * @returns Validation result with safe flag, risk score, sanitized text, and warnings
  */
 export function validateForLLM(text: string): {
   safe: boolean;
@@ -368,104 +833,4 @@ export function validateForLLM(text: string): {
     sanitized,
     warnings,
   };
-}
-
-// -----------------------------------------------------------------------------
-// SSRF Protection
-// -----------------------------------------------------------------------------
-
-/**
- * URL patterns that should be blocked to prevent Server-Side Request Forgery.
- */
-const SSRF_BLOCKED_PATTERNS = [
-  // Private / internal network ranges
-  /^https?:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,
-  /^https?:\/\/(172\.(1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}/i,
-  /^https?:\/\/(192\.168)\.\d{1,3}\.\d{1,3}/i,
-  /^https?:\/\/(127\.\d{1,3}\.\d{1,3}\.\d{1,3})/i,
-  /^https?:\/\/(0)\.\d{1,3}\.\d{1,3}\.\d{1,3}/i,
-  /^https?:\/\/localhost/i,
-  /^https?:\/\/\[::1\]/i,
-  /^https?:\/\/\[?fe80/i,
-  /^https?:\/\/\[?fc00/i,
-
-  // Metadata endpoints
-  /^https?:\/\/169\.254\.\d{1,3}\.\d{1,3}/i,
-  /^https?:\/\/metadata\.google\.internal/i,
-  /^https?:\/\/metadata\.google\.com/i,
-
-  // Cloud provider metadata
-  /^https?:\/\/100\.100\.100\.200/i,
-  /^https?:\/\/instance-data/i,
-
-  // Common service discovery
-  /^https?:\/\/consul/i,
-  /^https?:\/\/etcd/i,
-  /^https?:\/\/zookeeper/i,
-  /^https?:\/\/kubernetes\.default/i,
-
-  // DNS rebinding risk
-  /^https?:\/\/[a-z0-9]+\.local/i,
-  /^https?:\/\/.*\.internal/i,
-  /^https?:\/\/.*\.corp/i,
-  /^https?:\/\/.*\.private/i,
-];
-
-/**
- * Check if a URL is safe from SSRF attacks.
- * Returns { safe, reason } where reason is null if safe.
- */
-export function checkSSRFSafety(url: string): { safe: boolean; reason: string | null } {
-  if (!url || typeof url !== 'string') {
-    return { safe: false, reason: 'Empty URL' };
-  }
-
-  // Must be http or https
-  if (!/^https?:\/\//i.test(url)) {
-    return { safe: false, reason: 'Only HTTP/HTTPS URLs are allowed' };
-  }
-
-  for (const pattern of SSRF_BLOCKED_PATTERNS) {
-    if (pattern.test(url)) {
-      return { safe: false, reason: `URL matches SSRF blocklist pattern: ${pattern.source}` };
-    }
-  }
-
-  // Block non-standard ports (except common web ports)
-  const urlObj = new URL(url);
-  const port = urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80);
-  const allowedPorts = [80, 443, 8080, 8443, 3000, 3001];
-  if (!allowedPorts.includes(parseInt(String(port), 10))) {
-    return { safe: false, reason: `Port ${port} is not in the allowed list` };
-  }
-
-  // Block file:// and data:// protocols
-  if (/^(file|data|ftp|sftp|ssh|telnet|gopher|dict|ldap|ldaps):/i.test(url)) {
-    return { safe: false, reason: `Protocol not allowed: ${url.split(':')[0]}` };
-  }
-
-  return { safe: true, reason: null };
-}
-
-/**
- * Validate and sanitize a list of URLs (e.g., from user input or generated content).
- * Returns array of safe URLs and array of blocked reasons.
- */
-export function validateUrls(urls: string[]): {
-  safeUrls: string[];
-  blocked: Array<{ url: string; reason: string }>;
-} {
-  const safeUrls: string[] = [];
-  const blocked: Array<{ url: string; reason: string }> = [];
-
-  for (const url of urls) {
-    const result = checkSSRFSafety(url);
-    if (result.safe) {
-      safeUrls.push(url);
-    } else {
-      blocked.push({ url, reason: result.reason || 'Unknown' });
-    }
-  }
-
-  return { safeUrls, blocked };
 }

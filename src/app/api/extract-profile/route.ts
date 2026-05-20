@@ -3,6 +3,7 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { validateInput, extractProfileSchema } from '@/lib/validation';
 import { rateLimit } from '@/lib/rate-limit';
 import { db } from '@/lib/db';
+import { validateForLLM } from '@/lib/security';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,10 +20,46 @@ export async function POST(request: NextRequest) {
     }
 
     const { messages } = validation.data;
+
+    // --- Prompt Injection Protection ---
+    // Validate the concatenation of all user messages for prompt injection patterns
+    const userTexts = messages
+      .filter((m: { role: string; content: string }) => m.role === 'user')
+      .map((m: { role: string; content: string }) => m.content)
+      .join('\n');
+    const llmValidation = validateForLLM(userTexts);
+
+    if (llmValidation.risk >= 0.7) {
+      console.warn('[EXTRACT_PROFILE_SECURITY] Prompt injection blocked', {
+        risk: llmValidation.risk,
+        warnings: llmValidation.warnings,
+      });
+      return NextResponse.json(
+        {
+          error: 'Input appears to contain instructions intended to manipulate AI behavior. Please provide legitimate business information.',
+        },
+        { status: 422 }
+      );
+    }
+
+    // Use sanitized user messages if moderate risk, otherwise originals
+    const safeMessages = llmValidation.risk >= 0.3
+      ? messages.map((m: { role: string; content: string }) =>
+          m.role === 'user' ? { ...m, content: llmValidation.sanitized } : m
+        )
+      : messages;
+
+    if (llmValidation.risk >= 0.3) {
+      console.warn('[EXTRACT_PROFILE_SECURITY] Prompt injection risk detected — using sanitized input', {
+        risk: llmValidation.risk,
+        warnings: llmValidation.warnings,
+      });
+    }
+
     const zai = await ZAI.create();
 
-    // Build conversation summary
-    const conversationText = messages
+    // Build conversation summary from safe messages
+    const conversationText = safeMessages
       .map((m: { role: string; content: string }) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
       .join('\n\n');
 

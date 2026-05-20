@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useCallback } from 'react';
-import { Shield, Download, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Shield, Download, AlertTriangle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,50 @@ interface SandboxedPreviewProps {
 }
 
 // =============================================================================
+// Helpers
+// =============================================================================
+
+/**
+ * Inject a `<base>` tag into HTML so relative resources resolve correctly
+ * inside a sandboxed iframe (which lacks `allow-same-origin`).
+ * Uses `about:blank` as a safe origin that won't leak parent context.
+ */
+function injectBaseTag(html: string): string {
+  // If a <base> tag already exists, skip injection
+  if (/<base\s[^>]*>/i.test(html)) return html;
+
+  const baseTag = '<base href="about:blank" target="_self">';
+
+  if (/<head[^>]*>/i.test(html)) {
+    // Insert right after <head>
+    return html.replace(/(<head[^>]*>)/i, `$1${baseTag}`);
+  }
+
+  if (/<html[^>]*>/i.test(html)) {
+    // Insert a <head> with the base tag after <html>
+    return html.replace(/(<html[^>]*>)/i, `$1<head>${baseTag}</head>`);
+  }
+
+  // No <html> or <head> — prepend a minimal head
+  return `<head>${baseTag}</head>${html}`;
+}
+
+// =============================================================================
+// SecurityBadge — small overlay shown in the iframe corner
+// =============================================================================
+
+function SecurityBadge() {
+  return (
+    <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 backdrop-blur-sm text-white/80 select-none pointer-events-none">
+      <span className="text-xs" role="img" aria-label="Locked">
+        🔒
+      </span>
+      <span className="text-[10px] font-medium leading-none">Sandboxed</span>
+    </div>
+  );
+}
+
+// =============================================================================
 // Component
 // =============================================================================
 
@@ -38,12 +82,14 @@ export function SandboxedPreview({
   businessName = 'storecraft-website',
 }: SandboxedPreviewProps) {
   const [showWarnings, setShowWarnings] = useState(false);
+  const [warningsDismissed, setWarningsDismissed] = useState(false);
 
-  // Sanitize the HTML before rendering
+  // Sanitize the HTML before rendering and inject <base> tag
   const { sanitizedHtml, sanitizeResult } = useMemo(() => {
     const result: SanitizeResult = sanitizeGeneratedHtml(html);
+    const withBase = injectBaseTag(result.html);
     return {
-      sanitizedHtml: result.html,
+      sanitizedHtml: withBase,
       sanitizeResult: result,
     };
   }, [html]);
@@ -89,9 +135,10 @@ export function SandboxedPreview({
     }
   }, [sanitizedHtml, businessName]);
 
-  // Dismiss warnings
+  // Dismiss warnings — persists for the session
   const handleDismissWarnings = useCallback(() => {
     setShowWarnings(false);
+    setWarningsDismissed(true);
   }, []);
 
   return (
@@ -126,9 +173,9 @@ export function SandboxedPreview({
         </div>
       </div>
 
-      {/* Sanitization Warnings Panel */}
+      {/* Warning Banner — shown when sanitization removed scripts/frames */}
       <AnimatePresence>
-        {showWarnings && sanitizeResult.warnings.length > 0 && (
+        {!warningsDismissed && totalIssues > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -136,49 +183,76 @@ export function SandboxedPreview({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-3 py-2 bg-amber-500/5 border-b border-amber-500/10">
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-3 w-3 text-amber-500" />
-                  <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                    Security Sanitization Report
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5"
-                  onClick={handleDismissWarnings}
+            <div className="flex items-start gap-2 px-3 py-2 bg-amber-500/5 border-b border-amber-500/10">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  Security sanitization applied
+                </p>
+                <p className="text-[11px] text-amber-600/70 dark:text-amber-400/70 mt-0.5">
+                  {sanitizeResult.scriptsRemoved > 0 && (
+                    <span>{sanitizeResult.scriptsRemoved} script{sanitizeResult.scriptsRemoved !== 1 ? 's' : ''} removed.{' '}
+                    </span>
+                  )}
+                  {sanitizeResult.framesRemoved > 0 && (
+                    <span>{sanitizeResult.framesRemoved} frame{sanitizeResult.framesRemoved !== 1 ? 's' : ''} removed.{' '}
+                    </span>
+                  )}
+                  {sanitizeResult.externalLinksRemoved > 0 && (
+                    <span>{sanitizeResult.externalLinksRemoved} unsafe link{sanitizeResult.externalLinksRemoved !== 1 ? 's' : ''} removed.</span>
+                  )}
+                </p>
+                <button
+                  type="button"
+                  className="text-[10px] text-amber-500 hover:text-amber-600 mt-1 underline underline-offset-2"
+                  onClick={() => setShowWarnings(!showWarnings)}
                 >
-                  <X className="h-3 w-3 text-muted-foreground" />
-                </Button>
+                  {showWarnings ? 'Hide' : 'Show'} details
+                </button>
               </div>
-              <div className="space-y-0.5 max-h-24 overflow-y-auto">
-                {sanitizeResult.warnings.map((warning, idx) => (
-                  <p
-                    key={idx}
-                    className="text-[10px] text-amber-600/70 dark:text-amber-400/70 leading-relaxed"
-                  >
-                    &bull; {warning}
-                  </p>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="shrink-0 text-muted-foreground hover:text-foreground p-0.5"
+                onClick={handleDismissWarnings}
+                aria-label="Dismiss warnings"
+              >
+                <X className="h-3 w-3" />
+              </button>
             </div>
+
+            {/* Detailed warnings list */}
+            {showWarnings && sanitizeResult.warnings.length > 0 && (
+              <div className="px-3 py-2 bg-amber-500/5 border-b border-amber-500/10">
+                <div className="space-y-0.5 max-h-24 overflow-y-auto">
+                  {sanitizeResult.warnings.map((warning, idx) => (
+                    <p
+                      key={idx}
+                      className="text-[10px] text-amber-600/70 dark:text-amber-400/70 leading-relaxed"
+                    >
+                      &bull; {warning}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Sandboxed iframe */}
-      <iframe
-        srcDoc={sanitizedHtml}
-        title={title}
-        className="w-full border-0 flex-1"
-        style={{
-          height: height || 'calc(100vh - 180px)',
-        }}
-        sandbox="allow-scripts allow-same-origin"
-        referrerPolicy="no-referrer"
-      />
+      {/* Sandboxed iframe — allow-scripts only, NO allow-same-origin for security */}
+      <div className="relative flex-1">
+        <iframe
+          srcDoc={sanitizedHtml}
+          title={title}
+          className="w-full border-0 flex-1"
+          style={{
+            height: height || 'calc(100vh - 180px)',
+          }}
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
+        />
+        <SecurityBadge />
+      </div>
     </div>
   );
 }

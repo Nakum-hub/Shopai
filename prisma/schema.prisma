@@ -8,6 +8,26 @@ datasource db {
 }
 
 // =============================================================================
+// User (tenant isolation groundwork)
+// =============================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String?  @unique
+  name      String?
+  role      String   @default("user") // user, admin
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  storefronts           Storefront[]
+  conversationSessions  ConversationSession[]
+  semanticMemories      SemanticMemory[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// =============================================================================
 // Storefront (Generated Website)
 // =============================================================================
 
@@ -27,7 +47,9 @@ model Storefront {
   viewCount       Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  userId          String?
 
+  user               User?              @relation(fields: [userId], references: [id])
   analytics          StorefrontAnalytics[]
   generationJobs     GenerationJob[]
   pipelineExecutions PipelineExecution[]
@@ -39,6 +61,7 @@ model Storefront {
   @@index([status, createdAt])
   @@index([category, status])
   @@index([businessName])
+  @@index([userId])
 }
 
 // =============================================================================
@@ -155,12 +178,15 @@ model ConversationSession {
   lastMessageAt   DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  userId          String?
 
+  user     User?         @relation(fields: [userId], references: [id])
   messages ChatHistory[]
 
   @@index([sessionId])
   @@index([storefrontId])
   @@index([lastMessageAt])
+  @@index([userId])
 }
 
 // =============================================================================
@@ -219,9 +245,13 @@ model SemanticMemory {
   expiresAt  DateTime? // optional TTL
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  userId     String?
+
+  user User? @relation(fields: [userId], references: [id])
 
   @@unique([sessionId, key])
   @@index([sessionId])
   @@index([category])
   @@index([key])
+  @@index([userId])
 }

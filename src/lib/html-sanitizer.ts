@@ -1,268 +1,494 @@
+'use server';
+
 // =============================================================================
-// HTML Sanitizer for Generated Content
-// Strips dangerous elements while preserving safe inline functionality
+// HTML Sanitizer for AI-Generated Content
+// =============================================================================
+// Context-aware HTML sanitizer using DOMPurify. Provides three security tiers
+// (preview, store, deploy) with different allow-lists and custom hooks for
+// stripping dangerous resources, validating image sources, and sanitizing CSS.
 // =============================================================================
 
+import DOMPurify from 'isomorphic-dompurify';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+/**
+ * Result of sanitizing generated HTML content.
+ */
 export interface SanitizeResult {
+  /** The sanitized HTML string */
   html: string;
+  /** Human-readable warnings about removed or modified elements */
   warnings: string[];
+  /** Number of <script> elements that were removed */
   scriptsRemoved: number;
+  /** Number of <iframe>, <embed>, <object> elements that were removed */
   framesRemoved: number;
+  /** Number of external resource links that were removed */
   externalLinksRemoved: number;
 }
 
 /**
- * Allowed domains for image sources (placeholder services)
+ * Sanitization context determining the security tier.
+ * - `preview`: Allow inline styles, structural tags, https images. No scripts, iframes, external resources.
+ * - `store`: Same as preview but also strip external stylesheets, keep inline styles.
+ * - `deploy`: Most restrictive — strip ALL scripts, ALL external resources. Only inline styles.
  */
-const ALLOWED_IMAGE_DOMAINS = ['placehold.co'];
+export type SanitizeContext = 'preview' | 'store' | 'deploy';
+
+// =============================================================================
+// DOMPurify Configurations per Context
+// =============================================================================
+
+/** Base tags shared across all contexts. */
+const BASE_ALLOWED_TAGS = [
+  // Document structure
+  'html', 'head', 'body', 'title', 'meta', 'link',
+  // Semantic sections
+  'div', 'span', 'section', 'article', 'header', 'footer', 'nav', 'main', 'aside',
+  // Headings
+  'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  // Block elements
+  'p', 'br', 'hr', 'blockquote', 'pre', 'details', 'summary',
+  // Inline formatting
+  'strong', 'em', 'b', 'i', 'small', 'code', 'mark', 'sub', 'sup', 'u', 's',
+  // Lists
+  'ul', 'ol', 'li', 'dl', 'dt', 'dd',
+  // Media
+  'a', 'img', 'figure', 'figcaption', 'picture', 'source',
+  // Tables
+  'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption',
+  // Forms
+  'form', 'input', 'textarea', 'select', 'option', 'button', 'label',
+] as const;
+
+/** Base attributes shared across all contexts. */
+const BASE_ALLOWED_ATTR = [
+  'alt', 'class', 'id', 'style', 'title', 'role', 'aria-*',
+  'href', 'target', 'rel',
+  'src', 'srcset', 'sizes', 'width', 'height', 'loading', 'decoding',
+  'type', 'media',
+  'colspan', 'rowspan', 'scope', 'headers',
+  'name', 'value', 'placeholder', 'required', 'disabled', 'readonly',
+  'min', 'max', 'step', 'pattern', 'maxlength', 'autocomplete',
+  'for', 'action', 'method',
+  'charset', 'content', 'http-equiv',
+  'open',
+] as const;
 
 /**
- * Check if a URL is an allowed external domain
+ * Exported DOMPurify configurations for each sanitization context.
+ * Consumers can use these directly if they need custom DOMPurify calls.
  */
-function isAllowedExternalDomain(url: string): boolean {
-  try {
-    const parsed = new URL(url);
-    return ALLOWED_IMAGE_DOMAINS.some(
-      (domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)
-    );
-  } catch {
-    return false;
-  }
+export const DOMPURIFY_CONFIG = {
+  /**
+   * Preview context — moderate security.
+   * Allows styles, structural tags, https images. No scripts, iframes, or external resources.
+   */
+  preview: {
+    ALLOWED_TAGS: [...BASE_ALLOWED_TAGS, 'style'],
+    ALLOWED_ATTR: [...BASE_ALLOWED_ATTR],
+    FORBID_TAGS: ['script', 'iframe', 'embed', 'object', 'base', 'applet'],
+    FORBID_ATTR: [
+      'onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur',
+      'onsubmit', 'onchange', 'oninput', 'onkeydown', 'onkeyup', 'onkeypress',
+      'onmousedown', 'onmouseup', 'ondblclick', 'oncontextmenu', 'ondrag',
+      'ondragstart', 'ondragend', 'ondrop', 'onscroll', 'onresize',
+      'onanimationstart', 'onanimationend', 'ontransitionend',
+      'ontouchstart', 'ontouchend', 'ontouchmove', 'onwheel',
+      'oncopy', 'oncut', 'onpaste', 'oninvalid', 'onabort',
+      'formaction', 'xlink:href',
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ENTITY: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    WHOLE_DOCUMENT: true,
+  },
+
+  /**
+   * Store context — moderate-high security.
+   * Same as preview but strips external stylesheets. Keeps inline styles.
+   */
+  store: {
+    ALLOWED_TAGS: [...BASE_ALLOWED_TAGS, 'style'],
+    ALLOWED_ATTR: [...BASE_ALLOWED_ATTR],
+    FORBID_TAGS: ['script', 'iframe', 'embed', 'object', 'base', 'applet'],
+    FORBID_ATTR: [
+      'onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur',
+      'onsubmit', 'onchange', 'oninput', 'onkeydown', 'onkeyup', 'onkeypress',
+      'onmousedown', 'onmouseup', 'ondblclick', 'oncontextmenu', 'ondrag',
+      'ondragstart', 'ondragend', 'ondrop', 'onscroll', 'onresize',
+      'onanimationstart', 'onanimationend', 'ontransitionend',
+      'ontouchstart', 'ontouchend', 'ontouchmove', 'onwheel',
+      'oncopy', 'oncut', 'onpaste', 'oninvalid', 'onabort',
+      'formaction', 'xlink:href',
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ENTITY: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    WHOLE_DOCUMENT: true,
+  },
+
+  /**
+   * Deploy context — highest security.
+   * Strips ALL scripts, ALL external resources. Only inline styles permitted.
+   * Suitable for static HTML output.
+   */
+  deploy: {
+    ALLOWED_TAGS: [...BASE_ALLOWED_TAGS, 'style'],
+    ALLOWED_ATTR: [...BASE_ALLOWED_ATTR],
+    FORBID_TAGS: ['script', 'iframe', 'embed', 'object', 'base', 'applet'],
+    FORBID_ATTR: [
+      'onclick', 'onload', 'onerror', 'onmouseover', 'onfocus', 'onblur',
+      'onsubmit', 'onchange', 'oninput', 'onkeydown', 'onkeyup', 'onkeypress',
+      'onmousedown', 'onmouseup', 'ondblclick', 'oncontextmenu', 'ondrag',
+      'ondragstart', 'ondragend', 'ondrop', 'onscroll', 'onresize',
+      'onanimationstart', 'onanimationend', 'ontransitionend',
+      'ontouchstart', 'ontouchend', 'ontouchmove', 'onwheel',
+      'oncopy', 'oncut', 'onpaste', 'oninvalid', 'onabort',
+      'formaction', 'xlink:href',
+    ],
+    ALLOW_DATA_ATTR: false,
+    ALLOW_ENTITY: true,
+    RETURN_DOM: false,
+    RETURN_DOM_FRAGMENT: false,
+    WHOLE_DOCUMENT: true,
+  },
+} as const;
+
+// =============================================================================
+// Custom Sanitization Hooks
+// =============================================================================
+
+/**
+ * Create DOMPurify hooks for a given sanitization context.
+ * Tracks removals and adds detailed warnings for each stripped element.
+ *
+ * @param context - The sanitization context
+ * @param counters - Mutable counters for removed elements
+ * @returns DOMPurify HOOKS configuration
+ */
+function createContextHooks(
+  context: SanitizeContext,
+  counters: { scripts: number; frames: number; externalLinks: number },
+  warnings: string[]
+): Record<string, unknown> {
+  return {
+    /**
+     * Hook called when DOMPurify removes a node.
+     * Tracks which types of elements were removed for reporting.
+     */
+    uponSanitizeElement: (node: Element, data: { tagName: string; allowedTags: Set<string> }) => {
+      const tagName = (node.tagName || '').toLowerCase();
+
+      // Track removed scripts
+      if (tagName === 'script') {
+        counters.scripts++;
+        const src = (node as HTMLScriptElement).getAttribute('src');
+        if (src) {
+          warnings.push(`Removed <script> with external source: ${src.substring(0, 120)}`);
+        } else {
+          warnings.push('Removed inline <script> element (scripts not allowed in static output)');
+        }
+      }
+
+      // Track removed frames/embeds/objects
+      if (tagName === 'iframe' || tagName === 'embed' || tagName === 'object') {
+        counters.frames++;
+        const src = (node as HTMLElement).getAttribute('src') || '';
+        warnings.push(
+          `Removed <${tagName}> element (nesting/embed prevention)${src ? `: ${src.substring(0, 120)}` : ''}`
+        );
+      }
+
+      // Track removed base tags
+      if (tagName === 'base') {
+        warnings.push('Removed <base> element (URL manipulation prevention)');
+      }
+    },
+
+    /**
+     * Hook called for each attribute on each node.
+     * Validates attribute values and strips dangerous ones.
+     */
+    uponSanitizeAttribute: (node: Element, data: { attrName: string; attrValue: string; keepAttr: boolean }) => {
+      const attrName = data.attrName.toLowerCase();
+      const attrValue = data.attrValue;
+
+      // Block javascript: URIs universally
+      if (attrValue && /^\s*javascript\s*:/i.test(attrValue)) {
+        data.keepAttr = false;
+        warnings.push(`Removed ${attrName} attribute with javascript: URI on <${(node.tagName || '').toLowerCase()}>`);
+        return;
+      }
+
+      // Block data:text/html URIs
+      if (attrValue && /^\s*data\s*:\s*text\/html/i.test(attrValue)) {
+        data.keepAttr = false;
+        warnings.push(`Removed ${attrName} attribute with data:text/html URI (XSS prevention)`);
+        return;
+      }
+
+      // Block vbscript: URIs
+      if (attrValue && /^\s*vbscript\s*:/i.test(attrValue)) {
+        data.keepAttr = false;
+        warnings.push(`Removed ${attrName} attribute with vbscript: URI`);
+        return;
+      }
+
+      // Validate href attributes
+      if (attrName === 'href' && attrValue) {
+        const trimmed = attrValue.trim().toLowerCase();
+        const isSafeScheme = trimmed.startsWith('https:') || trimmed.startsWith('http:') ||
+          trimmed.startsWith('mailto:') || trimmed.startsWith('tel:') ||
+          trimmed.startsWith('#') || trimmed.startsWith('/') || trimmed.startsWith('?') ||
+          trimmed.startsWith('.') || !trimmed.includes(':');
+
+        if (!isSafeScheme) {
+          data.keepAttr = false;
+          counters.externalLinks++;
+          warnings.push(`Removed unsafe href: ${attrValue.substring(0, 120)}`);
+          return;
+        }
+      }
+
+      // Validate img src attributes
+      if (attrName === 'src' && attrValue) {
+        const trimmed = attrValue.trim().toLowerCase();
+        const isSafeScheme = trimmed.startsWith('https:') || trimmed.startsWith('http:') ||
+          trimmed.startsWith('data:image/') ||
+          trimmed.startsWith('/') || trimmed.startsWith('.') ||
+          trimmed.startsWith('#') || !trimmed.includes(':');
+
+        if (!isSafeScheme) {
+          data.keepAttr = false;
+          warnings.push(`Removed img with untrusted source: ${attrValue.substring(0, 120)}`);
+          return;
+        }
+
+        // In deploy context, only allow relative images and data: URIs
+        if (context === 'deploy' && (trimmed.startsWith('http://') || trimmed.startsWith('https://'))) {
+          data.keepAttr = false;
+          warnings.push(`Removed external image resource in deploy context: ${attrValue.substring(0, 120)}`);
+          return;
+        }
+      }
+
+      // Validate link[href] for external stylesheets
+      if (attrName === 'href' && attrValue && (node.tagName || '').toLowerCase() === 'link') {
+        const trimmed = attrValue.trim().toLowerCase();
+        const rel = (node as HTMLLinkElement).getAttribute('rel') || '';
+        const relLower = rel.toLowerCase();
+
+        // Block external stylesheets in store and deploy contexts
+        if ((context === 'store' || context === 'deploy') &&
+            (relLower.includes('stylesheet') || trimmed.endsWith('.css'))) {
+          data.keepAttr = false;
+          counters.externalLinks++;
+          warnings.push(`Removed external stylesheet link in ${context} context: ${attrValue.substring(0, 120)}`);
+          return;
+        }
+
+        // Block external import links in all contexts
+        if (relLower.includes('import')) {
+          data.keepAttr = false;
+          counters.externalLinks++;
+          warnings.push(`Removed HTML import link: ${attrValue.substring(0, 120)}`);
+          return;
+        }
+      }
+
+      // Sanitize CSS in style attributes
+      if (attrName === 'style' && attrValue) {
+        if (containsDangerousCSS(attrValue)) {
+          data.attrValue = sanitizeCSSValue(attrValue);
+          warnings.push('Sanitized CSS expression in style attribute (XSS prevention)');
+        }
+      }
+
+      // Block form actions to external URLs
+      if (attrName === 'action' && attrValue) {
+        const trimmed = attrValue.trim().toLowerCase();
+        if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+          data.keepAttr = false;
+          warnings.push(`Removed form action to external URL: ${attrValue.substring(0, 120)}`);
+          return;
+        }
+      }
+
+      // Block http-equiv="refresh" (redirect attacks)
+      if (attrName === 'http-equiv' && attrValue && attrValue.toLowerCase() === 'refresh') {
+        data.keepAttr = false;
+        warnings.push('Removed <meta http-equiv="refresh"> (redirect prevention)');
+        return;
+      }
+    },
+
+    /**
+     * Hook called after sanitization is complete.
+     * Can perform final cleanup on the DOM.
+     */
+    afterSanitizeAttributes: (node: Element) => {
+      const tagName = (node.tagName || '').toLowerCase();
+
+      // Sanitize content inside <style> tags
+      if (tagName === 'style' && node.textContent) {
+        if (containsDangerousCSS(node.textContent)) {
+          node.textContent = sanitizeCSSContent(node.textContent);
+          warnings.push('Sanitized dangerous CSS constructs in <style> tag');
+        }
+      }
+    },
+  };
+}
+
+// =============================================================================
+// CSS Sanitization Helpers
+// =============================================================================
+
+/**
+ * Check if a CSS string contains potentially dangerous constructs.
+ *
+ * @param css - The CSS string to check
+ * @returns True if dangerous constructs are found
+ */
+function containsDangerousCSS(css: string): boolean {
+  return (
+    /expression\s*\(/i.test(css) ||
+    /javascript\s*:/i.test(css) ||
+    /vbscript\s*:/i.test(css) ||
+    /-moz-binding\s*:/i.test(css) ||
+    /behavior\s*:/i.test(css) ||
+    /@import\s/i.test(css) ||
+    /url\s*\(\s*['"]?\s*javascript/i.test(css) ||
+    /url\s*\(\s*['"]?\s*data\s*:\s*text\/html/i.test(css)
+  );
 }
 
 /**
- * Check if a URL is a safe relative URL (anchor, no protocol)
+ * Sanitize a CSS value (inline style attribute) by removing dangerous constructs.
+ *
+ * @param css - The CSS value string to sanitize
+ * @returns Sanitized CSS string
  */
-function isSafeRelativeUrl(url: string): boolean {
-  if (!url) return true;
-  const trimmed = url.trim().toLowerCase();
-  // Empty, hash-only, or relative path
-  if (trimmed === '' || trimmed === '#' || trimmed.startsWith('#') || trimmed.startsWith('/')) return true;
-  // Not a protocol-based URL
-  if (!trimmed.includes(':')) return true;
-  return false;
+function sanitizeCSSValue(css: string): string {
+  let sanitized = css;
+
+  // Remove expression()
+  sanitized = sanitized.replace(/expression\s*\([^)]*\)/gi, '');
+
+  // Remove javascript: and vbscript: in url()
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*(?:javascript|vbscript)[^)]*\)/gi, '');
+
+  // Remove -moz-binding
+  sanitized = sanitized.replace(/-moz-binding\s*:[^;}"']*/gi, '');
+
+  // Remove behavior
+  sanitized = sanitized.replace(/behavior\s*:[^;}"']*/gi, '');
+
+  // Remove @import
+  sanitized = sanitized.replace(/@import\s+[^;]*;/gi, '');
+
+  // Remove url() with data:text/html
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*data\s*:\s*text\/html[^)]*\)/gi, '');
+
+  return sanitized.trim();
 }
 
 /**
- * Sanitize href attributes: remove javascript:, data: URIs, external URLs
- * except allowed domains
+ * Sanitize CSS content inside <style> tags.
+ * More thorough than sanitizeCSSValue — handles multi-line CSS.
+ *
+ * @param css - The CSS content to sanitize
+ * @returns Sanitized CSS content
  */
-function sanitizeHref(href: string): string | null {
-  if (!href) return null;
-  const trimmed = href.trim();
+function sanitizeCSSContent(css: string): string {
+  let sanitized = css;
 
-  // Remove javascript: URLs entirely
-  if (/^\s*javascript\s*:/i.test(trimmed)) return null;
+  // Remove expression()
+  sanitized = sanitized.replace(/expression\s*\((?:[^()]*|\([^)]*\))*\)/gi, '');
 
-  // Remove data: URIs
-  if (/^\s*data\s*:/i.test(trimmed)) return null;
+  // Remove javascript: and vbscript: in url()
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*(?:javascript|vbscript)[^)]*\)/gi, '');
 
-  // Allow relative URLs (anchors, paths)
-  if (isSafeRelativeUrl(trimmed)) return trimmed;
+  // Remove -moz-binding rules
+  sanitized = sanitized.replace(/-moz-binding\s*:[^;}"']*;?/gi, '');
 
-  // Block all other external URLs
-  return null;
-}
+  // Remove behavior rules
+  sanitized = sanitized.replace(/behavior\s*:[^;}"']*;?/gi, '');
 
-/**
- * Sanitize src attributes on images: only allow placehold.co and data URIs
- */
-function sanitizeImgSrc(src: string): string | null {
-  if (!src) return null;
-  const trimmed = src.trim();
+  // Remove @import statements
+  sanitized = sanitized.replace(/@import\s+(?:url\s*\(\s*)?['"]?[^;}"']+['"]?\s*\)?\s*;?/gi, '');
 
-  // Allow data URIs for inline images
-  if (/^\s*data\s*:/i.test(trimmed)) return trimmed;
-
-  // Allow relative URLs
-  if (isSafeRelativeUrl(trimmed)) return trimmed;
-
-  // Allow specific domains
-  if (isAllowedExternalDomain(trimmed)) return trimmed;
-
-  return null;
-}
-
-/**
- * Remove dangerous patterns from inline script content
- */
-function sanitizeInlineScriptContent(content: string): string {
-  let sanitized = content;
-
-  // Remove window.open calls
-  sanitized = sanitized.replace(/window\s*\.\s*open\s*\(/g, '/* [removed: window.open] */');
-
-  // Remove document.location assignments
-  sanitized = sanitized.replace(/document\s*\.\s*location\s*=/g, '/* [removed: document.location] */');
-  sanitized = sanitized.replace(/window\s*\.\s*location\s*=/g, '/* [removed: window.location] */');
-  sanitized = sanitized.replace(/location\s*\.\s*href\s*=/g, '/* [removed: location.href] */');
-
-  // Remove eval() calls
-  sanitized = sanitized.replace(/\beval\s*\(/g, '/* [removed: eval] */');
-
-  // Remove document.cookie access
-  sanitized = sanitized.replace(/document\s*\.\s*cookie/g, '/* [removed: document.cookie] */');
-
-  // Remove localStorage/sessionStorage access
-  sanitized = sanitized.replace(/localStorage\s*\./g, '/* [removed: localStorage] */');
-  sanitized = sanitized.replace(/sessionStorage\s*\./g, '/* [removed: sessionStorage] */');
-
-  // Remove postMessage
-  sanitized = sanitized.replace(/window\s*\.\s*postMessage/g, '/* [removed: postMessage] */');
-
-  // Remove XMLHttpRequest / fetch
-  sanitized = sanitized.replace(/new\s+XMLHttpRequest/g, '/* [removed: XMLHttpRequest] */');
+  // Remove url() with data:text/html
+  sanitized = sanitized.replace(/url\s*\(\s*['"]?\s*data\s*:\s*text\/html[^)]*\)/gi, '');
 
   return sanitized;
 }
 
+// =============================================================================
+// Main Sanitization Function
+// =============================================================================
+
 /**
- * Main HTML sanitizer function
- * Removes dangerous elements, scripts with external src, frames, and unsafe URLs
- * Preserves inline scripts (needed for basic interactivity) after sanitizing their content
+ * Sanitize AI-generated HTML for the specified context.
+ *
+ * - **preview**: Allows styles, structural tags, https images. Strips scripts,
+ *   iframes, embeds, objects, and external resource references.
+ * - **store**: Same as preview but additionally strips external stylesheet links.
+ *   Keeps inline `<style>` tags.
+ * - **deploy**: Most restrictive — strips ALL scripts, ALL external resources
+ *   (including external images). Only inline styles and relative resources.
+ *
+ * @param html - The raw HTML string to sanitize
+ * @param context - The sanitization context ('preview' | 'store' | 'deploy')
+ * @returns SanitizeResult with sanitized HTML, warnings, and removal counts
  */
-export function sanitizeGeneratedHtml(html: string): SanitizeResult {
+export function sanitizeGeneratedHtml(
+  html: string,
+  context: SanitizeContext = 'preview'
+): SanitizeResult {
+  if (!html || typeof html !== 'string') {
+    return {
+      html: '',
+      warnings: ['Empty or invalid HTML input provided'],
+      scriptsRemoved: 0,
+      framesRemoved: 0,
+      externalLinksRemoved: 0,
+    };
+  }
+
   const warnings: string[] = [];
-  let scriptsRemoved = 0;
-  let framesRemoved = 0;
-  let externalLinksRemoved = 0;
+  const counters = {
+    scripts: 0,
+    frames: 0,
+    externalLinks: 0,
+  };
 
-  let result = html;
+  // Get the base config for this context
+  const baseConfig = DOMPURIFY_CONFIG[context];
 
-  // =========================================================================
-  // 1. Remove <meta http-equiv="refresh"> tags
-  // =========================================================================
-  const metaRefreshRegex = /<meta\s+[^>]*http-equiv\s*=\s*["']?\s*refresh[^>]*\/?>/gi;
-  const metaRefreshMatches = result.match(metaRefreshRegex);
-  if (metaRefreshMatches) {
-    metaRefreshMatches.forEach(() => {
-      warnings.push('Removed <meta http-equiv="refresh"> (redirect prevention)');
-    });
-    result = result.replace(metaRefreshRegex, '');
-  }
+  // Build custom hooks for tracking and validation
+  const hooks = createContextHooks(context, counters, warnings);
 
-  // =========================================================================
-  // 2. Remove <script> tags with external src
-  // =========================================================================
-  const externalScriptRegex = /<script\s+[^>]*src\s*=\s*["'][^"']*["'][^>]*>[\s\S]*?<\/script\s*>/gi;
-  const externalScriptMatches = result.match(externalScriptRegex);
-  if (externalScriptMatches) {
-    scriptsRemoved += externalScriptMatches.length;
-    externalScriptMatches.forEach((match) => {
-      const srcMatch = match.match(/src\s*=\s*["']([^"']*)["']/);
-      warnings.push(`Removed external script: ${srcMatch ? srcMatch[1] : 'unknown'}`);
-    });
-    result = result.replace(externalScriptRegex, '');
-  }
+  // Merge base config with hooks
+  const config = {
+    ...baseConfig,
+    HOOKS: hooks,
+  } as Record<string, unknown>;
 
-  // =========================================================================
-  // 3. Remove <iframe>, <embed>, <object> tags
-  // =========================================================================
-  const frameRegex = /<(iframe|embed|object)\s+[^>]*>[\s\S]*?<\/(iframe|embed|object)\s*>/gi;
-  const frameMatches = result.match(frameRegex);
-  if (frameMatches) {
-    framesRemoved += frameMatches.length;
-    frameMatches.forEach((match) => {
-      const tagMatch = match.match(/<(iframe|embed|object)/i);
-      warnings.push(`Removed <${tagMatch ? tagMatch[1] : 'frame'}> element (nesting prevention)`);
-    });
-    result = result.replace(frameRegex, '');
-  }
-
-  // Also remove self-closing iframe/embed/object tags
-  const selfClosingFrameRegex = /<(iframe|embed|object)\s+[^>]*\/>/gi;
-  const selfClosingMatches = result.match(selfClosingFrameRegex);
-  if (selfClosingMatches) {
-    framesRemoved += selfClosingMatches.length;
-    selfClosingMatches.forEach(() => {
-      warnings.push('Removed self-closing frame/embed/object element');
-    });
-    result = result.replace(selfClosingFrameRegex, '');
-  }
-
-  // =========================================================================
-  // 4. Remove <link rel="import"> and external stylesheet imports
-  // =========================================================================
-  const externalLinkRegex = /<link\s+[^>]*(?:rel\s*=\s*["']?\s*import|stylesheet)[^>]*href\s*=\s*["'][^"']*["'][^>]*\/?>/gi;
-  const externalLinkMatches = result.match(externalLinkRegex);
-  if (externalLinkMatches) {
-    externalLinksRemoved += externalLinkMatches.length;
-    externalLinkMatches.forEach((match) => {
-      const hrefMatch = match.match(/href\s*=\s*["']([^"']*)["']/);
-      warnings.push(`Removed external link/import: ${hrefMatch ? hrefMatch[1] : 'unknown'}`);
-    });
-    result = result.replace(externalLinkRegex, '');
-  }
-
-  // =========================================================================
-  // 5. Remove <form> with external action
-  // =========================================================================
-  const externalFormRegex = /<form\s+[^>]*action\s*=\s*["'](?!#|javascript)[^"']+["'][^>]*>[\s\S]*?<\/form\s*>/gi;
-  const externalFormMatches = result.match(externalFormRegex);
-  if (externalFormMatches) {
-    externalFormMatches.forEach(() => {
-      warnings.push('Removed <form> with external action URL');
-    });
-    result = result.replace(externalFormRegex, '');
-  }
-
-  // =========================================================================
-  // 6. Sanitize inline <script> content
-  // =========================================================================
-  const inlineScriptRegex = /(<script\s*>)([\s\S]*?)(<\/script\s*>)/gi;
-  result = result.replace(inlineScriptRegex, (match, openTag, content, closeTag) => {
-    const sanitizedContent = sanitizeInlineScriptContent(content);
-    if (sanitizedContent !== content) {
-      warnings.push('Sanitized inline script: removed dangerous API calls');
-    }
-    return `${openTag}${sanitizedContent}${closeTag}`;
-  });
-
-  // =========================================================================
-  // 7. Sanitize href attributes - remove javascript: and data: URIs
-  // =========================================================================
-  const hrefRegex = /href\s*=\s*["']([^"']*)["']/gi;
-  result = result.replace(hrefRegex, (match, href) => {
-    const sanitized = sanitizeHref(href);
-    if (sanitized === null) {
-      externalLinksRemoved++;
-      warnings.push(`Removed unsafe href: ${href.substring(0, 80)}`);
-      return 'href="#"';
-    }
-    return match;
-  });
-
-  // =========================================================================
-  // 8. Sanitize src attributes on <img> tags
-  // =========================================================================
-  const imgSrcRegex = /<img\s+([^>]*?)src\s*=\s*["']([^"']*)["']([^>]*?)\/?>/gi;
-  result = result.replace(imgSrcRegex, (match, before, src, after) => {
-    const sanitized = sanitizeImgSrc(src);
-    if (sanitized === null) {
-      warnings.push(`Removed image with untrusted source: ${src.substring(0, 80)}`);
-      // Remove the entire img tag if source is blocked
-      return '';
-    }
-    return match;
-  });
-
-  // =========================================================================
-  // 9. Sanitize action attributes on remaining forms
-  // =========================================================================
-  const actionRegex = /action\s*=\s*["']([^"']*)["']/gi;
-  result = result.replace(actionRegex, (match, action) => {
-    if (/^\s*javascript\s*:/i.test(action)) {
-      warnings.push('Removed javascript: form action');
-      return 'action="#"';
-    }
-    return match;
-  });
+  // Run DOMPurify
+  const sanitizedHtml = DOMPurify.sanitize(html, config);
 
   return {
-    html: result,
+    html: sanitizedHtml,
     warnings,
-    scriptsRemoved,
-    framesRemoved,
-    externalLinksRemoved,
+    scriptsRemoved: counters.scripts,
+    framesRemoved: counters.frames,
+    externalLinksRemoved: counters.externalLinks,
   };
 }

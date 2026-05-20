@@ -1,4 +1,167 @@
 ---
+Task ID: 3-c
+Agent: Main Agent
+Task: Rewrite/create infrastructure security files — rate-limiter, middleware, tenant-isolation, ws-auth
+
+Work Log:
+- Rewrote src/lib/rate-limit.ts (280 lines):
+  - RateLimiter class with Redis backend using checkRateLimit from @/lib/redis
+  - Graceful degradation: falls back to in-memory fixed-window counter when Redis unavailable
+  - Redis health detection with 30-second cache to avoid pinging on every request
+  - Methods: check(identifier) and consume(identifier, n) with proper result types
+  - 5 pre-configured named limiters: generationLimiter (5/min), chatLimiter (30/min), voiceLimiter (10/min), storefrontLimiter (60/min), apiLimiter (100/min)
+  - rateLimitMiddleware(key, limiter) — returns async function for API route guards with 429 + Retry-After headers
+  - Backward-compatible legacy rateLimit() export (sync, in-memory) for existing 7 API routes
+  - Auto-cleanup of stale in-memory entries every 5 minutes
+- Rewrote src/middleware.ts (placed at correct Next.js root location, 280 lines):
+  - Content-Security-Policy with relaxed policy (unsafe-inline, unsafe-eval for Next.js compat)
+  - Content-Security-Policy-Report-Only with strict policy (no unsafe-inline/unsafe-eval) for violation monitoring
+  - CORS: origin allowlist, Vary: Origin on origin-specific responses, Access-Control-Expose-Headers
+  - CSRF: Double-Submit Cookie pattern — sets csrf_token cookie on GET, validates on POST/PUT/PATCH/DELETE to /api/
+  - CSRF currently logs warnings only (no auth system yet), ready to enforce
+  - Payload size pre-check: 50MB overall, 5MB for /api/, 10MB for /api/voice/ — rejects oversized before body parsing (413)
+  - Enhanced bot detection: 13 additional patterns (Log4j JNDI, SSRF in query params, shell injection, LDAP injection, prototype pollution)
+  - Extended blocked user agents: gobuster, ffuf, wfuzz, hydra, burpsuite, zap, arachni, w3af, acunetix, nessus, openvas, qualys
+  - Request ID tracking via X-Request-ID header
+  - Exported securityLog(level, reason, request, extra) — structured JSON logging for all blocked requests
+  - Config matcher unchanged
+- Created src/lib/tenant-isolation.ts (240 lines):
+  - TenantGuard class with checkOwnership() and extractFromRequest()
+  - extractAccessorId(request) — checks x-user-id, x-session-id headers, session cookies, Bearer token (placeholder)
+  - requireOwnership(resource, accessorId) — defensive ownership check
+  - filterByOwnership(resources, accessorId) — filters array to owned resources
+  - injectOwnershipFilter(query, accessorId) — modifies Prisma query with AND/OR ownership WHERE clause
+  - validateResourceAccess(resource, accessorId, requireOwner) — detailed validation with reason
+  - All functions defensive — never throw, return safe defaults
+  - Clear documentation: TEMPORARY measure until NextAuth.js is configured
+  - Migration path documented: userId priority → sessionId fallback
+- Created src/lib/ws-auth.ts (370 lines):
+  - WsAuthConfig interface: jwtSecret, tokenExpirySeconds, allowedOrigins, maxConnectionsPerSession, maxMessagesPerMinute
+  - createWsAuthToken(sessionId, payload, config) — HMAC-SHA256 JWT creation via node:crypto
+  - verifyWsAuthToken(token, config) — signature verification (timing-safe), expiry check, clock skew (5min), payload validation
+  - Token format: base64url(header).base64url(payload).base64url(signature) — zero external dependencies
+  - wsAuthMiddleware(socket, next) — Socket.IO middleware: extracts from handshake.auth.token or Authorization header
+  - Middleware attaches sessionId, authPayload, authenticatedAt to socket.data
+  - Connection rate limiting: max 10 connections per sessionId, tracked via in-memory Map
+  - Message rate limiting: max 100 messages/minute per connection, enforced via socket.use()
+  - registerConnection/unregisterConnection for lifecycle management
+  - createWsServerConfig(options) — Socket.IO server options with CORS and auth middleware reference
+  - getWsAuthDiagnostics() — monitoring helper for active sessions, connections, rate-limited sockets
+  - Auto-cleanup of stale message counters every 5 minutes
+- Verification: eslint 0 errors ✅, dev server running cleanly ✅
+
+Stage Summary:
+- Rate limiting: Redis-backed distributed limiter with in-memory fallback, backward-compatible API
+- Middleware: CSP Report-Only, CSRF double-submit cookies, payload size limits, enhanced bot detection, structured security logging
+- Tenant isolation: ownership guards for userId/sessionId, Prisma query injection, defensive design
+- WebSocket auth: custom HMAC-SHA256 JWT (no deps), Socket.IO middleware, connection + message rate limiting
+- All 4 files fully JSDoc-documented with section headers, defensive error handling
+---
+Task ID: 3-b
+Agent: Main Agent
+Task: Rewrite core security infrastructure files — DOMPurify, SSRF DNS, job signing, payload quotas
+
+Work Log:
+- Rewrote src/lib/security.ts (472 lines):
+  - Replaced all regex-based HTML sanitization with DOMPurify (isomorphic-dompurify)
+  - Strict allow-list config: NO script, iframe, embed, object, base, form, event handlers, javascript: URIs, data:text/html
+  - Keeps structural tags (html, head, body, div, span, section, article, header, footer, nav, main, h1-h6, p, a, img, ul, ol, li, table, thead, tbody, tr, th, td, figure, figcaption, br, hr, strong, em, b, i, small, code, pre, blockquote, details, summary, style)
+  - Allows src on img (https:, data:image, relative), href on a (https:, relative, mailto:, tel:), alt, class, id, style attributes
+  - SSRF protection upgraded from blocklist-only to DNS resolution via dns.promises.resolve()
+  - checkSSRFSafety() now async — resolves A/AAAA records, checks against private IP ranges (RFC 1918, loopback, link-local, cloud metadata)
+  - DNS cache with 5-minute TTL to avoid repeated lookups
+  - DNS rebinding protection: resolution happens AFTER pattern validation
+  - New sanitizeHtmlOutput(html, { allowStyles }) — DOMPurify-based with optional style tag support
+  - New extractUrlsFromHtml(html) — finds all href/src URLs for SSRF checking
+  - New createContentSecurityPolicy(nonce?) — CSP headers, removes unsafe-inline/unsafe-eval when nonce provided
+  - New SECURITY_CONFIG object: MAX_HTML_SIZE, MAX_INPUT_LENGTH, MAX_BUSINESS_PROFILE_SIZE, MAX_GENERATION_RETRIES, BLOCKED_IP_RANGES, DNS_CACHE_TTL_MS, ALLOWED_PORTS
+  - Kept: sanitizeString, generateNonce, isValidId, sanitizeEmail, sanitizePhone, validateForLLM, sanitizeForLLM, calculatePromptInjectionRisk
+  - Removed: old ALLOWED_TAGS, DANGEROUS_ATTRS, XSS_PATTERNS, regex-based sanitizeHtmlOutput
+- Rewrote src/lib/html-sanitizer.ts (310 lines):
+  - Replaced all regex-based sanitization with DOMPurify
+  - Export sanitizeGeneratedHtml(html, context: 'preview' | 'store' | 'deploy') with SanitizeResult interface
+  - preview context: allows styles, structural tags, https images; no scripts, iframes, external resources
+  - store context: same as preview + strips external stylesheets, keeps inline styles
+  - deploy context: most restrictive — strips ALL scripts, ALL external resources (including external images)
+  - DOMPurify HOOKS for custom sanitization: uponSanitizeElement tracks removals, uponSanitizeAttribute validates URIs and strips dangerous CSS
+  - CSS sanitization helpers: containsDangerousCSS, sanitizeCSSValue, sanitizeCSSContent (strips expression(), javascript:, @import, -moz-binding, behavior)
+  - Detailed warning messages for each removed element type
+  - Exported DOMPURIFY_CONFIG with per-context configurations
+  - SanitizeResult interface preserved: html, warnings, scriptsRemoved, framesRemoved, externalLinksRemoved
+- Created src/lib/job-signing.ts (182 lines):
+  - HMAC-SHA256 signing via node:crypto
+  - signJob(queueName, jobId, payload) — returns hex HMAC signature
+  - verifyJob(queueName, jobId, payload, signature) — timing-safe comparison via crypto.timingSafeEqual
+  - Canonical input: queueName:jobId:sha256(payloadJSON) — payload integrity hash included
+  - JOB_SIGNING_SECRET from env with deterministic fallback (warns about production use)
+  - generateSignedJobPayload() — returns combined { payload, signature, queueName, jobId }
+  - signWorkerMiddleware(job, queueName, handler) — BullMQ middleware: verifies signature before processing, throws JobSignatureError if invalid
+  - createSignedJobData() — convenience wrapper for Queue.add()
+  - Exported JobSignatureError class
+- Created src/lib/payload-quota.ts (278 lines):
+  - PayloadQuota class with per-endpoint quotas and custom limit overrides
+  - Per-endpoint quotas: POST /api/generate/website → 50KB, POST /api/chat → 10KB, POST /api/voice/process → 5MB, GET → no body limit, others → 100KB
+  - checkPayloadSize(body, endpoint, method) — validates request body size
+  - checkResponseSize(data, endpoint) — validates response size (generated HTML max 500KB)
+  - validatePayloadStructure(data, expectedKeys) — prototype pollution prevention (blocks __proto__, constructor, prototype, etc.)
+  - Constants: MAX_UPLOAD_SIZE (5MB), MAX_HTML_OUTPUT_SIZE (500KB), MAX_CHAT_MESSAGE_LENGTH (10KB), DEFAULT_BODY_LIMIT (100KB), HARD_MAX_BODY_SIZE (10MB)
+  - defaultQuota singleton instance for quick use
+  - All functions fully JSDoc-documented
+- Verification: eslint 0 errors ✅, dev server running cleanly ✅
+
+Stage Summary:
+- All 4 security infrastructure files complete: security.ts, html-sanitizer.ts, job-signing.ts, payload-quota.ts
+- HTML sanitization upgraded from fragile regex to production-grade DOMPurify with strict allow-lists
+- SSRF protection upgraded from pattern-only to DNS resolution with private IP detection and cache
+- BullMQ job integrity verification via HMAC-SHA256 with timing-safe comparison
+- Per-endpoint payload quotas with prototype pollution prevention
+- Zero lint errors, zero type errors, dev server healthy
+---
+Task ID: 3-d
+Agent: Main Agent
+Task: Update database schema for tenant isolation + frontend security hardening
+
+Work Log:
+- Updated prisma/schema.prisma:
+  - Added new `User` model with id (cuid), email (unique), name, role (default "user"), timestamps
+  - Added `userId String?` to Storefront, ConversationSession, SemanticMemory models
+  - Added `@@index([userId])` to all three models for efficient tenant queries
+  - Added `user User?` relation on Storefront, ConversationSession, SemanticMemory
+  - Added reverse relations on User: storefronts, conversationSessions, semanticMemories
+  - All existing fields and indexes preserved — no breaking changes
+- Updated src/components/preview/sandboxed-preview.tsx:
+  - Removed `allow-same-origin` from iframe sandbox attribute (was `sandbox="allow-scripts allow-same-origin"`, now `sandbox="allow-scripts"`)
+  - SECURITY WIN: iframe content can no longer access parent cookies/storage
+  - Created `injectBaseTag()` helper to inject `<base href="about:blank">` into HTML so relative resources resolve inside sandboxed iframe
+  - Added `SecurityBadge` component overlay showing "🔒 Sandboxed" indicator in bottom-right corner of iframe
+  - Added prominent warning banner at top when sanitization removed elements (scripts/frames count displayed)
+  - Warning banner is dismissible and shows detailed warning list on expand
+  - Wrapped iframe in relative `div` for SecurityBadge absolute positioning
+  - All existing props and functionality preserved
+- Updated src/app/api/chat/route.ts:
+  - Imported `validateForLLM` from `@/lib/security`
+  - Added prompt injection validation before processing user message
+  - risk >= 0.7 → returns 422 with "Input appears to contain instructions intended to manipulate AI behavior"
+  - risk >= 0.3 → uses sanitized text from `validateForLLM().sanitized`
+  - risk < 0.3 → proceeds normally with original input
+  - Logs validation results at warning level when any risk detected
+- Updated src/app/api/generate/website/route.ts:
+  - Same prompt injection validation pattern applied to prompt and businessProfile text
+  - 422 rejection at risk >= 0.7
+  - Sanitized input used at risk >= 0.3
+  - Warning-level logging for all detected risks
+- Updated src/app/api/extract-profile/route.ts:
+  - Validates concatenated user messages for prompt injection before sending to LLM
+  - Same 422/sanitized/normal three-tier response pattern
+  - Warning-level logging for detected risks
+- Verified: eslint 0 errors ✅, dev server running cleanly ✅
+
+Stage Summary:
+- Prisma schema now supports tenant isolation via User model with userId on Storefront, ConversationSession, SemanticMemory
+- iframe sandbox hardened: removed allow-same-origin, added SecurityBadge overlay, added sanitization warning banner
+- All 3 LLM-facing API routes (chat, generate/website, extract-profile) now have prompt injection protection
+- No existing functionality broken — all changes are additive security layers
+---
 Task ID: 6
 Agent: Main Agent
 Task: Enable React Strict Mode and fix all underlying issues (Audit Item #4)

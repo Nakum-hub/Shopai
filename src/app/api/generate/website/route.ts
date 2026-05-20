@@ -3,6 +3,7 @@ import ZAI from 'z-ai-web-dev-sdk';
 import { validateInput, generateWebsiteSchema } from '@/lib/validation';
 import { rateLimit } from '@/lib/rate-limit';
 import { validateHtml, repairHtml } from '@/lib/html-validator';
+import { validateForLLM } from '@/lib/security';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -25,11 +26,39 @@ export async function POST(request: NextRequest) {
     }
 
     const { businessProfile, prompt } = inputValidation.data;
+
+    // --- Prompt Injection Protection ---
+    // Validate both the freeform prompt and any text-heavy fields in businessProfile
+    const textToValidate = prompt || (businessProfile ? JSON.stringify(businessProfile) : '');
+    const llmValidation = validateForLLM(textToValidate);
+
+    if (llmValidation.risk >= 0.7) {
+      console.warn('[GENERATE_SECURITY] Prompt injection blocked', {
+        risk: llmValidation.risk,
+        warnings: llmValidation.warnings,
+      });
+      return NextResponse.json(
+        {
+          error: 'Input appears to contain instructions intended to manipulate AI behavior. Please provide legitimate business information.',
+        },
+        { status: 422 }
+      );
+    }
+
+    // Use sanitized prompt if moderate risk, otherwise original
+    const safePrompt = prompt && llmValidation.risk >= 0.3 ? llmValidation.sanitized : prompt;
+    if (llmValidation.risk >= 0.3) {
+      console.warn('[GENERATE_SECURITY] Prompt injection risk detected — using sanitized input', {
+        risk: llmValidation.risk,
+        warnings: llmValidation.warnings,
+      });
+    }
+
     const zai = await ZAI.create();
 
     const profileStr = businessProfile
       ? JSON.stringify(businessProfile, null, 2)
-      : prompt!;
+      : safePrompt!;
 
     // --- Stage 1: Generate complete storefront HTML ---
     const htmlGeneration = await zai.chat.completions.create({
