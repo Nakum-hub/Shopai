@@ -285,14 +285,15 @@ export class WorkflowEngine {
           } else {
             // Promise rejected
             context.nodeStatuses.set(node.id, 'failed');
+            const rejectedResult = result as PromiseRejectedResult;
             context.nodeResults.set(node.id, {
-              success: false, error: result.reason?.message || 'Unknown error', durationMs: 0,
+              success: false, error: rejectedResult.reason?.message || 'Unknown error', durationMs: 0,
             });
             emit({
               executionId, type: 'node_failed', nodeId: node.id, nodeName: node.name,
               agent: node.agent, status: 'failed',
               progress: Math.round((completedNodes / totalNodes) * 100),
-              message: `${node.name} crashed: ${result.reason?.message}`,
+              message: `${node.name} crashed: ${rejectedResult.reason?.message}`,
             });
           }
         }

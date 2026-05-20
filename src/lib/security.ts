@@ -7,6 +7,7 @@
 // =============================================================================
 
 import crypto from 'node:crypto';
+import { NextResponse } from 'next/server';
 
 // -----------------------------------------------------------------------------
 // HTML Sanitization
@@ -434,7 +435,7 @@ export function checkSSRFSafety(url: string): { safe: boolean; reason: string | 
   const urlObj = new URL(url);
   const port = urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80);
   const allowedPorts = [80, 443, 8080, 8443, 3000, 3001];
-  if (!allowedPorts.includes(parseInt(port, 10))) {
+  if (!allowedPorts.includes(parseInt(String(port), 10))) {
     return { safe: false, reason: `Port ${port} is not in the allowed list` };
   }
 

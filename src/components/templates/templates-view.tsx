@@ -154,7 +154,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 };
 
 // =============================================================================
@@ -198,13 +198,19 @@ export function TemplatesView() {
 
         // Validate that sections are StorefrontSection objects (not strings)
         const valid = raw.every(
-          (t) =>
-            t &&
-            typeof t === 'object' &&
-            Array.isArray(t.sections) &&
-            t.sections.length > 0 &&
-            typeof t.sections[0] === 'object' &&
-            'type' in t.sections[0]
+          (t: unknown) => {
+            const obj = t as Record<string, unknown>;
+            const sections = obj.sections;
+            return (
+              t &&
+              typeof t === 'object' &&
+              Array.isArray(sections) &&
+              sections.length > 0 &&
+              typeof sections[0] === 'object' &&
+              sections[0] !== null &&
+              'type' in sections[0]
+            );
+          }
         );
 
         if (valid) {
@@ -243,13 +249,19 @@ export function TemplatesView() {
         const raw = data.templates as unknown[];
         if (Array.isArray(raw) && raw.length > 0) {
           const valid = raw.every(
-            (t) =>
-              t &&
-              typeof t === 'object' &&
-              Array.isArray(t.sections) &&
-              t.sections.length > 0 &&
-              typeof t.sections[0] === 'object' &&
-              'type' in t.sections[0]
+            (t: unknown) => {
+              const obj = t as Record<string, unknown>;
+              const sections = obj.sections;
+              return (
+                t &&
+                typeof t === 'object' &&
+                Array.isArray(sections) &&
+                sections.length > 0 &&
+                typeof sections[0] === 'object' &&
+                sections[0] !== null &&
+                'type' in sections[0]
+              );
+            }
           );
           if (valid) {
             setTemplates(raw as Template[]);

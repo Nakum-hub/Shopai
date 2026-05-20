@@ -92,7 +92,8 @@ export class ResourcePool<T> {
     }
 
     // Create new if under max
-    if (this.inUse.size + this.available.length < (this.factory as unknown as { _maxSize?: number })._maxSize || 10) {
+    const maxSize = (this.factory as unknown as { _maxSize?: number })._maxSize ?? 10;
+    if (this.inUse.size + this.available.length < maxSize) {
       try {
         const resource = await this.factory();
         this.totalCreated++;

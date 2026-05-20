@@ -61,7 +61,7 @@ IMPORTANT RULES:
       thinking: { type: 'disabled' },
     });
 
-    let businessProfile: Record<string, unknown>;
+    let businessProfile: Record<string, unknown> | null;
     try {
       const rawContent = response.choices[0]?.message?.content || '{}';
       const cleaned = rawContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();

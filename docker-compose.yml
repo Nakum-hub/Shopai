@@ -3,10 +3,64 @@
 # =============================================================================
 # Usage: docker-compose up --build
 # =============================================================================
+# Architecture: PostgreSQL 16 + Redis 7 + BullMQ Queues
+# =============================================================================
 
 version: "3.8"
 
 services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 (Primary Database)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: storecraft-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: storecraft
+      POSTGRES_USER: storecraft
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-storecraft_prod_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storecraft -d storecraft"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - storecraft-network
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 (Cache + Queue Backend)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: storecraft-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --appendonly yes
+      --appendfsync everysec
+      --save 60 1000
+      --save 300 100
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - storecraft-network
+
   # ---------------------------------------------------------------------------
   # Main Application (Next.js)
   # ---------------------------------------------------------------------------
@@ -21,23 +75,27 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=file:/app/data/storecraft.db
+      - DATABASE_URL=postgresql://storecraft:${DB_PASSWORD:-storecraft_prod_password}@postgres:5432/storecraft?connection_limit=10&pool_timeout=30
+      - REDIS_URL=redis://redis:6379
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-changeme-in-production}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
     volumes:
-      - app-data:/app/data
       - app-logs:/app/logs
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
       generation-service:
         condition: service_healthy
     networks:
       - storecraft-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
+      start_period: 15s
 
   # ---------------------------------------------------------------------------
   # Generation Service (WebSocket Pipeline Orchestrator)
@@ -53,9 +111,13 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3002
-      - DATABASE_URL=file:/app/data/storecraft.db
-    volumes:
-      - app-data:/app/data
+      - DATABASE_URL=postgresql://storecraft:${DB_PASSWORD:-storecraft_prod_password}@postgres:5432/storecraft?connection_limit=5&pool_timeout=30
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - storecraft-network
     healthcheck:
@@ -63,7 +125,7 @@ services:
       interval: 15s
       timeout: 3s
       retries: 3
-      start_period: 5s
+      start_period: 10s
 
   # ---------------------------------------------------------------------------
   # Nginx Reverse Proxy (Production)
@@ -87,7 +149,9 @@ services:
 # Volumes
 # =============================================================================
 volumes:
-  app-data:
+  postgres-data:
+    driver: local
+  redis-data:
     driver: local
   app-logs:
     driver: local

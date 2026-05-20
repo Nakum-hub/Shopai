@@ -180,7 +180,7 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' } },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 };
 
 // =============================================================================
@@ -265,9 +265,9 @@ function CircularScore({
             className="transition-all duration-1000 ease-out"
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <Icon className={cn('mb-0.5', size === 'lg' ? 'size-5' : size === 'md' ? 'size-4' : 'size-3')} style={{ color }} />
-          <span className={cn('font-bold', size === 'lg' ? 'text-2xl' : size === 'md' ? 'text-xl' : 'text-base')} style={{ color }}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ color }}>
+          <Icon className={cn('mb-0.5', size === 'lg' ? 'size-5' : size === 'md' ? 'size-4' : 'size-3')} />
+          <span className={cn('font-bold', size === 'lg' ? 'text-2xl' : size === 'md' ? 'text-xl' : 'text-base')}>
             {score}
           </span>
         </div>

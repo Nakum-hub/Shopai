@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         businessName,
         category: category || 'other',
         description: description || null,
-        html: html || null,
+        html: html || '',
         businessProfile: businessProfile ? JSON.stringify(businessProfile) : null,
         status: html ? 'ready' : 'draft',
       },

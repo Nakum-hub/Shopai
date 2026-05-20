@@ -79,7 +79,7 @@ export interface Storefront {
 
 export interface StorefrontSection {
   id: string;
-  type: 'hero' | 'about' | 'products' | 'services' | 'testimonials' | 'contact' | 'gallery' | 'hours' | 'map' | 'footer' | 'cta' | 'team' | 'faq';
+  type: 'hero' | 'about' | 'products' | 'services' | 'testimonials' | 'contact' | 'gallery' | 'hours' | 'map' | 'footer' | 'cta' | 'team' | 'faq' | 'features' | 'pricing' | 'events';
   title: string;
   content: string;
   order: number;

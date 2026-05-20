@@ -19,12 +19,12 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const validation = validateInput(generateWebsiteSchema, body);
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+    const inputValidation = validateInput(generateWebsiteSchema, body);
+    if (!inputValidation.success) {
+      return NextResponse.json({ error: inputValidation.error }, { status: 400 });
     }
 
-    const { businessProfile, prompt } = validation.data;
+    const { businessProfile, prompt } = inputValidation.data;
     const zai = await ZAI.create();
 
     const profileStr = businessProfile
@@ -81,15 +81,15 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks. Star
       .trim();
 
     // --- Stage 2: Validate HTML ---
-    let validation = validateHtml(generatedHtml);
+    let htmlValidation = validateHtml(generatedHtml);
 
     // --- Stage 3: Auto-repair if needed ---
     let repairs: string[] = [];
-    if (!validation.passed) {
+    if (!htmlValidation.passed) {
       const repairResult = repairHtml(generatedHtml);
       generatedHtml = repairResult.html;
       repairs = repairResult.repairs;
-      validation = validateHtml(generatedHtml);
+      htmlValidation = validateHtml(generatedHtml);
     }
 
     // --- Stage 4: Generate SEO metadata ---
@@ -141,11 +141,11 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks. Star
       html: generatedHtml,
       seo: seoData,
       validation: {
-        score: validation.score,
-        passed: validation.passed,
-        checks: validation.checks,
-        issues: validation.issues,
-        summary: validation.summary,
+        score: htmlValidation.score,
+        passed: htmlValidation.passed,
+        checks: htmlValidation.checks,
+        issues: htmlValidation.issues,
+        summary: htmlValidation.summary,
       },
       repairs: repairs.length > 0 ? repairs : undefined,
       generationTime: `${(generationTimeMs / 1000).toFixed(1)}s`,

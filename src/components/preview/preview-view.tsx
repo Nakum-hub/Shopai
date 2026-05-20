@@ -54,7 +54,7 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
 import { SandboxedPreview } from '@/components/preview/sandboxed-preview';
-import type { StorefrontSection } from '@/lib/types';
+import type { StorefrontSection, BusinessCategory, Storefront, BusinessProfile } from '@/lib/types';
 
 // =============================================================================
 // Mock Bakery Storefront HTML
@@ -681,17 +681,17 @@ function EmptyState() {
       if (data.success && data.html) {
         // Create a storefront from the generated HTML
         const { useAppStore: store } = await import('@/store/app-store');
-        const newStorefront = {
+        const newStorefront: Storefront = {
           id: `storefront-${Date.now()}`,
           name: profile.name || 'Generated Storefront',
           businessName: profile.name || 'My Business',
-          category: profile.category || 'other',
+          category: (profile.category || 'other') as BusinessCategory,
           status: 'ready' as const,
           description: profile.description || '',
           url: '',
           sections: MOCK_SECTIONS,
           html: data.html,
-          businessProfile: profile,
+          businessProfile: profile as BusinessProfile,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           publishedAt: null,

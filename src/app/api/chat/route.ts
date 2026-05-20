@@ -167,7 +167,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if we have a stored business profile to return to the frontend
-    let storedProfile = null;
+    let storedProfile: Record<string, unknown> | null = null;
     try {
       storedProfile = await assembleBusinessProfile(sid);
     } catch { /* skip */ }

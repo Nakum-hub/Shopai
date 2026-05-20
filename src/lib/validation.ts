@@ -99,7 +99,7 @@ export const createStorefrontSchema = z.object({
   category: z.string().max(50).optional().default('other'),
   description: z.string().max(5000).optional(),
   html: z.string().max(500000).optional(),
-  businessProfile: z.record(z.unknown()).optional(),
+  businessProfile: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const updateStorefrontSchema = z.object({
@@ -110,7 +110,7 @@ export const updateStorefrontSchema = z.object({
   status: z.enum(['draft', 'generating', 'ready', 'published', 'error']).optional(),
   description: z.string().max(5000).optional(),
   html: z.string().max(500000).optional(),
-  businessProfile: z.record(z.unknown()).optional(),
+  businessProfile: z.record(z.string(), z.unknown()).optional(),
   deploymentStatus: z.enum(['none', 'deploying', 'deployed', 'failed']).optional(),
   deploymentUrl: z.string().max(500).optional(),
   publishedAt: z.string().optional().nullable(),
@@ -132,7 +132,7 @@ export const analyticsRequestSchema = z.object({
 export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): { success: true; data: T } | { success: false; error: string } {
   const result = schema.safeParse(data);
   if (!result.success) {
-    const firstError = result.error.errors[0];
+    const firstError = result.error.issues[0];
     return { success: false, error: firstError?.message || 'Invalid input' };
   }
   return { success: true, data: result.data };

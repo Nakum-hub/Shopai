@@ -1,4 +1,84 @@
 ---
+Task ID: 5
+Agent: Main Agent
+Task: Migrate from SQLite to PostgreSQL + Redis + BullMQ (Audit Item #2)
+
+Work Log:
+- Installed new dependencies: ioredis@5.10.1, bullmq@5.76.10
+- Migrated prisma/schema.prisma from SQLite to PostgreSQL:
+  - provider = "postgresql"
+  - Added @db.Text for large text fields (html, message, logs, sections, style, content, etc.)
+  - Removed @db.Double (not supported in PostgreSQL, Float maps to DoublePrecision natively)
+  - All indexes preserved and valid
+- Rewrote src/lib/db.ts:
+  - Removed all SQLite-specific code (WAL mode, PRAGMA queries, SQLITE_BUSY retry, WriteQueue, batchWrite)
+  - PostgreSQL connection pool via DATABASE_URL (?connection_limit=10&pool_timeout=30)
+  - PostgreSQL-specific health check (SELECT version(), pg_stat_activity, SHOW max_connections)
+  - Graceful shutdown with SIGINT/SIGTERM handlers
+- Created src/lib/redis.ts:
+  - ioredis singleton with lazy connect, auto-reconnect, exponential backoff
+  - Pub/Sub support (separate publisher/subscriber connections per Redis protocol)
+  - Session store helpers (setSession, getSession, deleteSession, refreshSession)
+  - Distributed rate limiting helper (checkRateLimit with sliding window)
+  - redisHealthCheck with server info, memory usage, key count
+- Created src/lib/queue.ts:
+  - 5 BullMQ queues: generation, analytics, pipeline-logs, cleanup, notifications
+  - Job options: exponential backoff, retry limits, remove-on-complete/fail policies
+  - Worker registration with concurrency control
+  - queueHealthCheck with job counts per queue
+  - Graceful shutdown
+- Migrated src/lib/cache.ts:
+  - Replaced in-memory MemoryCache with RedisCache class
+  - Same API surface (get, set, has, delete, deleteByPrefix, getOrSet, clear, getStats)
+  - All methods now async (Redis is network-based)
+  - 7 namespace instances: api, bi, analytics, template, validation, pipeline, session
+  - No auto-cleanup intervals needed (Redis handles TTL natively)
+  - Added increment() method for atomic counters
+- Updated src/app/api/health/route.ts:
+  - Reports PostgreSQL status + Redis status + Queue status
+  - Uses Promise.all for parallel health checks
+- Updated mini-services/generation-service/index.ts:
+  - Removed all SQLite code (WAL mode, PRAGMAs, SQLITE_BUSY retry wrapper)
+  - Direct Prisma calls (PostgreSQL handles concurrency natively via MVCC)
+  - PostgreSQL-compatible health check query
+- Updated docker-compose.yml:
+  - Added PostgreSQL 16 service (postgres:16-alpine) with healthcheck, persistent volume
+  - Added Redis 7 service (redis:7-alpine) with AOF persistence, LRU eviction, 256MB limit
+  - Updated app and generation-service to depend on both postgres and redis
+  - Updated DATABASE_URL for PostgreSQL connection strings with pooling params
+  - Added REDIS_URL environment variable to all services
+  - Removed SQLite app-data volume, added postgres-data and redis-data volumes
+- Updated Dockerfile (main):
+  - Added postgresql-client for Prisma migrations
+  - Removed SQLite /app/data directory
+  - Removed hardcoded SQLite DATABASE_URL
+  - Copies @prisma module for production
+- Updated mini-services/generation-service/Dockerfile:
+  - Added postgresql-client for Prisma
+  - Removed SQLite /app/data directory
+  - Removed hardcoded SQLite DATABASE_URL
+- Updated src/lib/database-architecture.ts:
+  - Complete architecture diagram (ASCII)
+  - Component documentation (PostgreSQL, Redis, BullMQ, Prisma)
+  - Scaling comparison table (SQLite vs PostgreSQL+Redis)
+  - Re-exports from db, redis, queue, cache modules
+- Updated .env and created .env.example:
+  - DATABASE_URL for PostgreSQL
+  - REDIS_URL for Redis
+  - DB_PASSWORD for docker-compose
+- Fixed prisma/schema.prisma validation errors (@db.Double not supported in PostgreSQL)
+- Fixed storefronts/route.ts (html field now non-nullable String @db.Text)
+- Fixed queue.ts (removed timeout from DefaultJobOptions — not supported in BullMQ v5)
+- Verified: prisma generate ✅, eslint 0 errors ✅, tsc --noEmit 0 errors ✅, dev server starts ✅
+
+Stage Summary:
+- COMPLETE migration from SQLite to PostgreSQL 16 + Redis 7 + BullMQ
+- Architecture now supports: concurrent writes (MVCC), horizontal scaling, distributed cache, job queues
+- 5 background job queues: generation, analytics, pipeline-logs, cleanup, notifications
+- Distributed rate limiting, session management, and pub/sub via Redis
+- Docker Compose includes PostgreSQL and Redis as first-class services with healthchecks
+- Zero TypeScript errors, zero lint errors, dev server running
+---
 Task ID: 4
 Agent: Main Agent
 Task: Harden SQLite database for production-grade resilience and document PostgreSQL migration path

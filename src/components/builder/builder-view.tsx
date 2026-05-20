@@ -292,7 +292,7 @@ function VoiceInputSection() {
 
   // Check mic support on mount
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
       setIsMicSupported(true);
     } else {
       setIsMicSupported(false);
