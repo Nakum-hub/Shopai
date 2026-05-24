@@ -355,7 +355,7 @@ const MALICIOUS_PATTERNS: Array<{ name: string; pattern: RegExp }> = [
   // Shell injection
   { name: 'shell_injection', pattern: /[;&|`$](\s*(cat|ls|id|whoami|uname|pwd|wget|curl|nc|bash|sh|python|perl|ruby|php)\b)/i },
   // LDAP injection
-  { name: 'ldap_injection', pattern: new RegExp('(\\*\\)(\\()|(cn|uid|dn|ou|dc|sn|mail)=[^\\)]*\\)', 'i') },
+  { name: 'ldap_injection', pattern: /\*\)|[()=].*(cn|uid|dn|ou|dc|sn|mail)=/i },
   // Prototype pollution attempt
   { name: 'prototype_pollution', pattern: /(__proto__|constructor\.prototype|Object\.assign.*__proto__)/i },
 ];

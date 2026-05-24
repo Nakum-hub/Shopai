@@ -1,10 +1,6 @@
-import { NextResponse } from 'next/server';
-
-/**
- * Security Headers API
- * Returns security header configuration for the application.
- * These headers are applied to all responses via middleware or layout.
- */
+import { NextRequest } from 'next/server';
+import { withRequestContext, logger } from '@/lib/request-context';
+import { success, createResponseTimings } from '@/lib/api-response';
 
 export interface SecurityHeadersConfig {
   'content-security-policy': string;
@@ -15,46 +11,41 @@ export interface SecurityHeadersConfig {
   'permissions-policy': string;
 }
 
-/**
- * GET /api/security/headers
- * Returns security header configuration
- */
-export async function GET() {
-  const headers: SecurityHeadersConfig = {
-    // Content Security Policy for the main application
-    'content-security-policy': [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: https://placehold.co https://z-cdn.chatglm.cn blob:",
-      "connect-src 'self' ws: wss:",
-      "frame-src 'self'",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'none'",
-    ].join('; '),
-    // Prevent MIME type sniffing
-    'x-content-type-options': 'nosniff',
-    // Prevent clickjacking — deny embedding in frames
-    'x-frame-options': 'DENY',
-    // Control referrer information
-    'referrer-policy': 'strict-origin-when-cross-origin',
-    // Legacy XSS protection header (still useful for older browsers)
-    'x-xss-protection': '1; mode=block',
-    // Restrict browser features
-    'permissions-policy': [
-      'camera=()',
-      'microphone=()',
-      'geolocation=()',
-      'payment=()',
-    ].join(', '),
-  };
+export async function GET(request: NextRequest) {
+  return withRequestContext(request, async () => {
+    const timings = createResponseTimings();
 
-  return NextResponse.json({
-    success: true,
-    headers,
-    description: 'Security headers configuration for StoreCraft AI application',
+    logger.info('[SECURITY_HEADERS_GET] Returning security headers config');
+
+    const headers: SecurityHeadersConfig = {
+      'content-security-policy': [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: https://placehold.co https://z-cdn.chatglm.cn blob:",
+        "connect-src 'self' ws: wss:",
+        "frame-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+      ].join('; '),
+      'x-content-type-options': 'nosniff',
+      'x-frame-options': 'DENY',
+      'referrer-policy': 'strict-origin-when-cross-origin',
+      'x-xss-protection': '1; mode=block',
+      'permissions-policy': [
+        'camera=()',
+        'microphone=()',
+        'geolocation=()',
+        'payment=()',
+      ].join(', '),
+    };
+
+    return success({
+      headers,
+      description: 'Security headers configuration for StoreCraft AI application',
+    }, timings.meta());
   });
 }

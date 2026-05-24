@@ -1,71 +1,81 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
 import { validateInput, generateWebsiteSchema } from '@/lib/validation';
 import { rateLimit } from '@/lib/rate-limit';
 import { validateHtml, repairHtml } from '@/lib/html-validator';
 import { validateForLLM } from '@/lib/security';
+import { withRequestContext, logger, getCurrentContext } from '@/lib/request-context';
+import { success, error, createResponseTimings } from '@/lib/api-response';
+import { errorHandler, ValidationError, RateLimitError, ExternalServiceError } from '@/lib/errors';
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  return withRequestContext(request, async () => {
+    const timings = createResponseTimings();
 
-  try {
-    // Rate limiting — website generation is expensive
-    const clientIp = request.headers.get('x-forwarded-for') || 'unknown';
-    const rl = rateLimit(`generate:${clientIp}`, 5, 60_000);
-    if (!rl.allowed) {
-      return NextResponse.json(
-        { error: 'Too many generation requests. Please wait a moment.', retryAfterMs: rl.retryAfterMs },
-        { status: 429 }
-      );
-    }
+    try {
+      logger.info('[GENERATE_WEBSITE] Starting website generation');
 
-    const body = await request.json();
-    const inputValidation = validateInput(generateWebsiteSchema, body);
-    if (!inputValidation.success) {
-      return NextResponse.json({ error: inputValidation.error }, { status: 400 });
-    }
+      // Rate limiting — website generation is expensive
+      const ctx = getCurrentContext();
+      const clientIp = ctx?.clientIp || 'unknown';
+      const rl = rateLimit(`generate:${clientIp}`, 5, 60_000);
+      if (!rl.allowed) {
+        logger.warn('[GENERATE_WEBSITE] Rate limit exceeded', { clientIp });
+        return error(new RateLimitError('Too many generation requests. Please wait a moment.', rl.retryAfterMs), timings.meta());
+      }
 
-    const { businessProfile, prompt } = inputValidation.data;
+      const body = await request.json();
+      const inputValidation = validateInput(generateWebsiteSchema, body);
+      if (!inputValidation.success) {
+        return error(new ValidationError(inputValidation.error), timings.meta());
+      }
 
-    // --- Prompt Injection Protection ---
-    // Validate both the freeform prompt and any text-heavy fields in businessProfile
-    const textToValidate = prompt || (businessProfile ? JSON.stringify(businessProfile) : '');
-    const llmValidation = validateForLLM(textToValidate);
+      const { businessProfile, prompt } = inputValidation.data;
 
-    if (llmValidation.risk >= 0.7) {
-      console.warn('[GENERATE_SECURITY] Prompt injection blocked', {
-        risk: llmValidation.risk,
-        warnings: llmValidation.warnings,
-      });
-      return NextResponse.json(
-        {
-          error: 'Input appears to contain instructions intended to manipulate AI behavior. Please provide legitimate business information.',
-        },
-        { status: 422 }
-      );
-    }
+      // --- Prompt Injection Protection ---
+      const textToValidate = prompt || (businessProfile ? JSON.stringify(businessProfile) : '');
+      const llmValidation = validateForLLM(textToValidate);
 
-    // Use sanitized prompt if moderate risk, otherwise original
-    const safePrompt = prompt && llmValidation.risk >= 0.3 ? llmValidation.sanitized : prompt;
-    if (llmValidation.risk >= 0.3) {
-      console.warn('[GENERATE_SECURITY] Prompt injection risk detected — using sanitized input', {
-        risk: llmValidation.risk,
-        warnings: llmValidation.warnings,
-      });
-    }
+      if (llmValidation.risk >= 0.7) {
+        logger.warn('[GENERATE_SECURITY] Prompt injection blocked', {
+          risk: llmValidation.risk,
+          warnings: llmValidation.warnings,
+        });
+        return error(
+          new ValidationError(
+            'Input appears to contain instructions intended to manipulate AI behavior. Please provide legitimate business information.',
+          ),
+          timings.meta(),
+        );
+      }
 
-    const zai = await ZAI.create();
+      const safePrompt = prompt && llmValidation.risk >= 0.3 ? llmValidation.sanitized : prompt;
+      if (llmValidation.risk >= 0.3) {
+        logger.warn('[GENERATE_SECURITY] Prompt injection risk detected — using sanitized input', {
+          risk: llmValidation.risk,
+          warnings: llmValidation.warnings,
+        });
+      }
 
-    const profileStr = businessProfile
-      ? JSON.stringify(businessProfile, null, 2)
-      : safePrompt!;
+      let zai;
+      try {
+        zai = await ZAI.create();
+      } catch (err) {
+        throw new ExternalServiceError('Failed to initialize AI service', 'llm', err instanceof Error ? err : undefined);
+      }
 
-    // --- Stage 1: Generate complete storefront HTML ---
-    const htmlGeneration = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content: `You are an expert web developer who creates beautiful, modern, mobile-responsive storefront websites for small businesses.
+      const profileStr = businessProfile
+        ? JSON.stringify(businessProfile, null, 2)
+        : safePrompt!;
+
+      // --- Stage 1: Generate complete storefront HTML ---
+      let htmlGeneration;
+      try {
+        htmlGeneration = await zai.chat.completions.create({
+          messages: [
+            {
+              role: 'assistant',
+              content: `You are an expert web developer who creates beautiful, modern, mobile-responsive storefront websites for small businesses.
 
 You generate COMPLETE, standalone HTML pages with:
 - Inline CSS (no external dependencies)
@@ -92,41 +102,46 @@ The HTML MUST include these sections based on the business:
 Use the business's color scheme from their style preferences.
 Make it look stunning and production-ready.
 Return ONLY the complete HTML. No markdown, no explanation, no code blocks. Start with <!DOCTYPE html>.`,
-        },
-        {
-          role: 'user',
-          content: `Generate a complete storefront website for this business:\n\n${profileStr}`,
-        },
-      ],
-      thinking: { type: 'disabled' },
-    });
+            },
+            {
+              role: 'user',
+              content: `Generate a complete storefront website for this business:\n\n${profileStr}`,
+            },
+          ],
+          thinking: { type: 'disabled' },
+        });
+      } catch (err) {
+        throw new ExternalServiceError('Failed to generate website HTML', 'llm', err instanceof Error ? err : undefined);
+      }
 
-    let generatedHtml = htmlGeneration.choices[0]?.message?.content || '';
+      let generatedHtml = htmlGeneration.choices[0]?.message?.content || '';
 
-    // Clean any markdown code blocks
-    generatedHtml = generatedHtml
-      .replace(/^```html\n?/i, '')
-      .replace(/\n?```\s*$/g, '')
-      .trim();
+      // Clean any markdown code blocks
+      generatedHtml = generatedHtml
+        .replace(/^```html\n?/i, '')
+        .replace(/\n?```\s*$/g, '')
+        .trim();
 
-    // --- Stage 2: Validate HTML ---
-    let htmlValidation = validateHtml(generatedHtml);
+      // --- Stage 2: Validate HTML ---
+      let htmlValidation = validateHtml(generatedHtml);
 
-    // --- Stage 3: Auto-repair if needed ---
-    let repairs: string[] = [];
-    if (!htmlValidation.passed) {
-      const repairResult = repairHtml(generatedHtml);
-      generatedHtml = repairResult.html;
-      repairs = repairResult.repairs;
-      htmlValidation = validateHtml(generatedHtml);
-    }
+      // --- Stage 3: Auto-repair if needed ---
+      let repairs: string[] = [];
+      if (!htmlValidation.passed) {
+        const repairResult = repairHtml(generatedHtml);
+        generatedHtml = repairResult.html;
+        repairs = repairResult.repairs;
+        htmlValidation = validateHtml(generatedHtml);
+      }
 
-    // --- Stage 4: Generate SEO metadata ---
-    const seoGeneration = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content: `Generate SEO metadata for a business website. Return JSON with:
+      // --- Stage 4: Generate SEO metadata ---
+      let seoData: Record<string, unknown> = {};
+      try {
+        const seoGeneration = await zai.chat.completions.create({
+          messages: [
+            {
+              role: 'assistant',
+              content: `Generate SEO metadata for a business website. Return JSON with:
           - title: string (SEO-optimized page title, max 60 chars)
           - description: string (meta description, max 160 chars)
           - keywords: array of strings
@@ -134,57 +149,62 @@ Return ONLY the complete HTML. No markdown, no explanation, no code blocks. Star
           - ogDescription: string
 
           Only return valid JSON. No markdown.`,
-        },
-        {
-          role: 'user',
-          content: `Business info: ${profileStr}`,
-        },
-      ],
-      thinking: { type: 'disabled' },
-    });
+            },
+            {
+              role: 'user',
+              content: `Business info: ${profileStr}`,
+            },
+          ],
+          thinking: { type: 'disabled' },
+        });
 
-    let seoData: Record<string, unknown> = {};
-    try {
-      const seoRaw = seoGeneration.choices[0]?.message?.content || '{}';
-      const seoCleaned = seoRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      seoData = JSON.parse(seoCleaned);
-    } catch {
-      seoData = { title: 'Business Storefront', description: 'Welcome to our business' };
-    }
+        try {
+          const seoRaw = seoGeneration.choices[0]?.message?.content || '{}';
+          const seoCleaned = seoRaw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          seoData = JSON.parse(seoCleaned);
+        } catch {
+          seoData = { title: 'Business Storefront', description: 'Welcome to our business' };
+        }
+      } catch (err) {
+        logger.warn('[GENERATE_WEBSITE] SEO generation failed, using defaults', { error: err instanceof Error ? err.message : String(err) });
+        seoData = { title: 'Business Storefront', description: 'Welcome to our business' };
+      }
 
-    // Inject SEO into HTML
-    if (generatedHtml.includes('<head>')) {
-      const metaTags = `
+      // Inject SEO into HTML
+      if (generatedHtml.includes('<head>')) {
+        const metaTags = `
     <title>${(seoData.title as string) || 'Business Storefront'}</title>
     <meta name="description" content="${(seoData.description as string) || ''}" />
     <meta name="keywords" content="${((seoData.keywords as string[]) || []).join(', ')}" />
     <meta property="og:title" content="${(seoData.ogTitle as string) || (seoData.title as string) || ''}" />
     <meta property="og:description" content="${(seoData.ogDescription as string) || (seoData.description as string) || ''}" />`;
-      generatedHtml = generatedHtml.replace('<head>', `<head>${metaTags}`);
+        generatedHtml = generatedHtml.replace('<head>', `<head>${metaTags}`);
+      }
+
+      const generationTimeMs = timings.elapsedMs();
+
+      logger.info('[GENERATE_WEBSITE] Website generated successfully', {
+        generationTimeMs,
+        htmlSize: Buffer.byteLength(generatedHtml),
+        validationScore: htmlValidation.score,
+      });
+
+      return success({
+        html: generatedHtml,
+        seo: seoData,
+        validation: {
+          score: htmlValidation.score,
+          passed: htmlValidation.passed,
+          checks: htmlValidation.checks,
+          issues: htmlValidation.issues,
+          summary: htmlValidation.summary,
+        },
+        repairs: repairs.length > 0 ? repairs : undefined,
+        generationTime: `${(generationTimeMs / 1000).toFixed(1)}s`,
+        htmlSize: `${(Buffer.byteLength(generatedHtml) / 1024).toFixed(1)}KB`,
+      }, timings.meta());
+    } catch (err) {
+      return errorHandler(err, request);
     }
-
-    const generationTimeMs = Date.now() - startTime;
-
-    return NextResponse.json({
-      success: true,
-      html: generatedHtml,
-      seo: seoData,
-      validation: {
-        score: htmlValidation.score,
-        passed: htmlValidation.passed,
-        checks: htmlValidation.checks,
-        issues: htmlValidation.issues,
-        summary: htmlValidation.summary,
-      },
-      repairs: repairs.length > 0 ? repairs : undefined,
-      generationTime: `${(generationTimeMs / 1000).toFixed(1)}s`,
-      htmlSize: `${(Buffer.byteLength(generatedHtml) / 1024).toFixed(1)}KB`,
-    });
-  } catch (error) {
-    console.error('[GENERATE_WEBSITE]', error);
-    return NextResponse.json(
-      { error: 'Failed to generate website', details: String(error) },
-      { status: 500 }
-    );
-  }
+  });
 }

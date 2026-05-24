@@ -255,3 +255,29 @@ model SemanticMemory {
   @@index([key])
   @@index([userId])
 }
+
+// =============================================================================
+// Audit Log (structured audit trail)
+// =============================================================================
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  timestamp     DateTime @default(now())
+  actorId       String?
+  actorType     String   @default("anonymous") // user, system, admin, anonymous
+  action        String   // e.g. "storefront.create", "auth.login"
+  resource      String   // e.g. "storefront", "chat_session", "user"
+  resourceId    String?
+  level         String   @default("info") // info, warn, critical
+  details       String?  @db.Text // JSON string
+  ip            String?
+  userAgent     String?
+  sessionId     String?
+  correlationId String?
+
+  @@index([actorId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([timestamp])
+  @@index([level])
+}

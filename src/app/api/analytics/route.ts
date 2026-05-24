@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { validateInput, analyticsRequestSchema } from '@/lib/validation';
 import { rateLimit } from '@/lib/rate-limit';
 import { analyticsCache, analyticsKey } from '@/lib/cache';
 import { runSandboxValidation } from '@/lib/sandbox';
+import { withRequestContext, logger, getCurrentContext } from '@/lib/request-context';
+import { success, error, createResponseTimings } from '@/lib/api-response';
+import { errorHandler, ValidationError, NotFoundError, RateLimitError } from '@/lib/errors';
 
 // ---------------------------------------------------------------------------
 // Helpers: derive topPages from HTML sections
@@ -14,20 +17,14 @@ interface ParsedSection {
   text: string;
 }
 
-/**
- * Extract meaningful section names from HTML by inspecting heading tags and
- * semantic landmarks (section, nav, footer, header, article).
- */
 function extractSectionsFromHtml(html: string): ParsedSection[] {
   const sections: ParsedSection[] = [];
 
-  // 1. Pull text from <title>
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (titleMatch?.[1]) {
     sections.push({ name: 'Home', text: titleMatch[1] });
   }
 
-  // 2. Pull H2 headings as page/section indicators
   const h2Regex = /<h2[^>]*>([\s\S]*?)<\/h2>/gi;
   let h2Match: RegExpExecArray | null;
   while ((h2Match = h2Regex.exec(html)) !== null) {
@@ -37,7 +34,6 @@ function extractSectionsFromHtml(html: string): ParsedSection[] {
     }
   }
 
-  // 3. Pull H3 headings as subsection indicators
   const h3Regex = /<h3[^>]*>([\s\S]*?)<\/h3>/gi;
   let h3Match: RegExpExecArray | null;
   while ((h3Match = h3Regex.exec(html)) !== null) {
@@ -47,7 +43,6 @@ function extractSectionsFromHtml(html: string): ParsedSection[] {
     }
   }
 
-  // 4. Use nav links as page indicators
   const navRegex = /<nav[\s>][\s\S]*?<\/nav>/gi;
   let navMatch: RegExpExecArray | null;
   while ((navMatch = navRegex.exec(html)) !== null) {
@@ -61,7 +56,6 @@ function extractSectionsFromHtml(html: string): ParsedSection[] {
     }
   }
 
-  // Deduplicate by name
   const seen = new Set<string>();
   return sections.filter(s => {
     const key = s.name.toLowerCase();
@@ -71,26 +65,16 @@ function extractSectionsFromHtml(html: string): ParsedSection[] {
   });
 }
 
-/**
- * Build a weighted topPages list from parsed HTML sections.
- * The first section (Home) always gets the highest share, and shares decay
- * for subsequent sections following a power-law distribution.
- */
 function buildTopPages(sections: ParsedSection[], totalViews: number): Array<{ page: string; views: number; percentage: number }> {
-  if (sections.length === 0) {
-    return [];
-  }
+  if (sections.length === 0) return [];
 
-  // Weight distribution: first item gets ~35%, rest decay
   const weights = sections.map((_, i) => {
     if (i === 0) return 1.0;
     return Math.pow(0.55, i);
   });
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
-  // Ensure percentages sum close to 100
   const rawPercentages = weights.map(w => (w / totalWeight) * 100);
-  // Round and adjust the first entry so the total is exactly 100
   const rounded = rawPercentages.map(p => Math.round(p));
   const diff = 100 - rounded.reduce((a, b) => a + b, 0);
   rounded[0] += diff;
@@ -130,9 +114,6 @@ const DEVICE_DISTRIBUTION_BY_CATEGORY: Record<string, { mobile: number; desktop:
 
 const DEFAULT_DEVICE_DISTRIBUTION = { mobile: 62, desktop: 28, tablet: 10 };
 
-/**
- * Derive device breakdown from the storefront's business category.
- */
 function buildDeviceBreakdown(
   category: string,
   uniqueVisitors: number,
@@ -151,37 +132,42 @@ function buildDeviceBreakdown(
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const rawStorefrontId = searchParams.get('storefrontId');
-    const rawDays = searchParams.get('days');
+  return withRequestContext(request, async () => {
+    const timings = createResponseTimings();
 
-    // Validate inputs
-    const validation = validateInput(analyticsRequestSchema, {
-      storefrontId: rawStorefrontId || '',
-      days: rawDays ? parseInt(rawDays, 10) : 30,
-    });
-    if (!validation.success) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+    try {
+      const { searchParams } = new URL(request.url);
+      const rawStorefrontId = searchParams.get('storefrontId');
+      const rawDays = searchParams.get('days');
+
+      const validation = validateInput(analyticsRequestSchema, {
+        storefrontId: rawStorefrontId || '',
+        days: rawDays ? parseInt(rawDays, 10) : 30,
+      });
+      if (!validation.success) {
+        return error(new ValidationError(validation.error), timings.meta());
+      }
+
+      const { storefrontId, days } = validation.data;
+
+      const ctx = getCurrentContext();
+      const clientIp = ctx?.clientIp || 'unknown';
+      const rl = rateLimit(`analytics:${clientIp}`, 60, 60_000);
+      if (!rl.allowed) {
+        return error(new RateLimitError('Too many requests'), rl.retryAfterMs);
+      }
+
+      // Use cache for the expensive computation
+      const cacheKey = analyticsKey(storefrontId, days);
+      const result = await analyticsCache.getOrSet(cacheKey, () => buildAnalyticsResponse(storefrontId, days), 120_000);
+
+      logger.info('[ANALYTICS_GET] Analytics fetched', { storefrontId, days });
+
+      return success(result, timings.meta());
+    } catch (err) {
+      return errorHandler(err, request);
     }
-
-    const { storefrontId, days } = validation.data;
-
-    // Rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || 'unknown';
-    const rl = rateLimit(`analytics:${clientIp}`, 60, 60_000);
-    if (!rl.allowed) {
-      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
-    }
-
-    // --- Use cache for the expensive computation ---
-    const cacheKey = analyticsKey(storefrontId, days);
-    const result = await analyticsCache.getOrSet(cacheKey, () => buildAnalyticsResponse(storefrontId, days), 120_000);
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error('[ANALYTICS_GET]', error);
-    return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 });
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -189,7 +175,6 @@ export async function GET(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 async function buildAnalyticsResponse(storefrontId: string, days: number) {
-  // 1. Storefront details (include html + category for derived metrics)
   const storefront = await db.storefront.findUnique({
     where: { id: storefrontId },
     select: {
@@ -204,10 +189,9 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
   });
 
   if (!storefront) {
-    return NextResponse.json({ error: 'Storefront not found' }, { status: 404 });
+    throw new NotFoundError('Storefront not found', storefrontId);
   }
 
-  // 2. Analytics records for the date range
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - days);
   const startDateStr = startDate.toISOString().split('T')[0];
@@ -220,7 +204,6 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
     orderBy: { date: 'asc' },
   });
 
-  // 3. Pipeline execution stats
   const pipelineExecutions = await db.pipelineExecution.findMany({
     where: { storefrontId },
     select: {
@@ -233,7 +216,6 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
     take: 20,
   });
 
-  // --- Aggregate real data ---
   const totalViews = analyticsRecords.reduce((s, r) => s + r.totalViews, 0);
   const uniqueVisitors = analyticsRecords.reduce((s, r) => s + r.uniqueVisitors, 0);
   const avgDuration = analyticsRecords.length > 0
@@ -248,7 +230,6 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
   const performanceScore = latestScores?.performanceScore || 0;
   const accessibilityScore = latestScores?.accessibilityScore || 0;
 
-  // Daily views data (real + fill gaps with zeros for chart continuity)
   const dailyViews: Array<{ date: string; views: number; visitors: number }> = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date();
@@ -262,7 +243,6 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
     });
   }
 
-  // Calculate previous period for change percentages
   const prevStart = new Date(startDate);
   prevStart.setDate(prevStart.getDate() - days);
   const prevStartStr = prevStart.toISOString().split('T')[0];
@@ -280,15 +260,11 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
   const viewsChange = prevViews > 0 ? ((totalViews - prevViews) / prevViews * 100).toFixed(1) : '0';
   const visitorsChange = prevVisitors > 0 ? ((uniqueVisitors - prevVisitors) / prevVisitors * 100).toFixed(1) : '0';
 
-  // Top pages — derived from actual HTML sections
   const htmlContent = storefront.html || '';
   const sections = extractSectionsFromHtml(htmlContent);
   const topPages = buildTopPages(sections, totalViews);
-
-  // Device breakdown — derived from business category
   const deviceBreakdown = buildDeviceBreakdown(storefront.category, uniqueVisitors);
 
-  // Generation quality metrics from pipeline executions
   const avgValidationScore = pipelineExecutions.length > 0
     ? Math.round(pipelineExecutions.filter(e => e.validationScore !== null).reduce((s, e) => s + (e.validationScore || 0), 0) / Math.max(1, pipelineExecutions.filter(e => e.validationScore !== null).length))
     : 0;
@@ -296,7 +272,6 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
     ? Math.round(pipelineExecutions.reduce((s, e) => s + (e.durationMs || 0), 0) / pipelineExecutions.length)
     : 0;
 
-  // Sandbox validation (only if HTML exists)
   const sandbox = htmlContent.length > 0 ? runSandboxValidation(htmlContent) : null;
 
   return {
@@ -313,7 +288,6 @@ async function buildAnalyticsResponse(storefrontId: string, days: number) {
       seoScore,
       performanceScore,
       accessibilityScore,
-      // Business intelligence metrics
       generationMetrics: {
         totalExecutions: pipelineExecutions.length,
         successRate: pipelineExecutions.length > 0

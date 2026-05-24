@@ -1,4 +1,4 @@
-'use server';
+'use client';
 
 // =============================================================================
 // HTML Sanitizer for AI-Generated Content

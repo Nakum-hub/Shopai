@@ -1,72 +1,66 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { generateBIReport } from '@/lib/business-intelligence';
 import { rateLimit } from '@/lib/rate-limit';
+import { withRequestContext, logger, getCurrentContext } from '@/lib/request-context';
+import { success, error, createResponseTimings } from '@/lib/api-response';
+import { errorHandler, ValidationError, NotFoundError, RateLimitError } from '@/lib/errors';
 
-/**
- * GET /api/bi — Business Intelligence API
- *
- * Routes (via query param):
- *   GET /api/bi?storefrontId=xxx           — Full BI report
- *   GET /api/bi?storefrontId=xxx&mode=health   — Health score only
- *   GET /api/bi?storefrontId=xxx&mode=insights — Insights & recommendations only
- */
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const storefrontId = searchParams.get('storefrontId');
-    const mode = searchParams.get('mode'); // 'health' | 'insights' | undefined (full report)
+  return withRequestContext(request, async () => {
+    const timings = createResponseTimings();
 
-    if (!storefrontId) {
-      return NextResponse.json(
-        { error: 'storefrontId query parameter is required' },
-        { status: 400 },
-      );
-    }
+    try {
+      logger.info('[BI_GET] Generating BI report');
 
-    // Rate limiting
-    const clientIp = request.headers.get('x-forwarded-for') || 'unknown';
-    const rl = rateLimit(`bi:${clientIp}`, 30, 60_000);
-    if (!rl.allowed) {
-      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
-    }
+      const { searchParams } = new URL(request.url);
+      const storefrontId = searchParams.get('storefrontId');
+      const mode = searchParams.get('mode');
 
-    // Verify storefront exists
-    const storefront = await db.storefront.findUnique({
-      where: { id: storefrontId },
-      select: { id: true },
-    });
+      if (!storefrontId) {
+        return error(new ValidationError('storefrontId query parameter is required'), timings.meta());
+      }
 
-    if (!storefront) {
-      return NextResponse.json({ error: 'Storefront not found' }, { status: 404 });
-    }
+      const ctx = getCurrentContext();
+      const clientIp = ctx?.clientIp || 'unknown';
+      const rl = rateLimit(`bi:${clientIp}`, 30, 60_000);
+      if (!rl.allowed) {
+        return error(new RateLimitError('Too many requests'), rl.retryAfterMs);
+      }
 
-    // Full report is always generated (needed for all modes)
-    const report = await generateBIReport(storefrontId);
-
-    // Mode-based response
-    if (mode === 'health') {
-      return NextResponse.json({
-        healthScore: report.healthScore,
-        generatedAt: report.generatedAt,
+      const storefront = await db.storefront.findUnique({
+        where: { id: storefrontId },
+        select: { id: true },
       });
-    }
 
-    if (mode === 'insights') {
-      return NextResponse.json({
-        insights: report.insights,
-        recommendations: report.recommendations,
-        summary: report.summary,
-        generatedAt: report.generatedAt,
-      });
-    }
+      if (!storefront) {
+        return error(new NotFoundError('Storefront not found', storefrontId), timings.meta());
+      }
 
-    // Default: full report
-    return NextResponse.json(report);
-  } catch (error) {
-    console.error('[BI_GET]', error);
-    const message = error instanceof Error ? error.message : 'Failed to generate BI report';
-    const status = message.includes('not found') ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
-  }
+      const report = await generateBIReport(storefrontId);
+
+      if (mode === 'health') {
+        logger.info('[BI_GET] Health score returned', { storefrontId });
+        return success({
+          healthScore: report.healthScore,
+          generatedAt: report.generatedAt,
+        }, timings.meta());
+      }
+
+      if (mode === 'insights') {
+        logger.info('[BI_GET] Insights returned', { storefrontId });
+        return success({
+          insights: report.insights,
+          recommendations: report.recommendations,
+          summary: report.summary,
+          generatedAt: report.generatedAt,
+        }, timings.meta());
+      }
+
+      logger.info('[BI_GET] Full BI report returned', { storefrontId });
+      return success(report, timings.meta());
+    } catch (err) {
+      return errorHandler(err, request);
+    }
+  });
 }
