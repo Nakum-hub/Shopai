@@ -126,15 +126,11 @@ export interface UseGenerationWsReturn {
 
 export function useGenerationWs(callbacks: GenerationCallbacks, options?: UseGenerationWsOptions): UseGenerationWsReturn {
   const callbacksRef = useRef(callbacks);
-  callbacksRef.current = callbacks;
 
-  // Stable handler map that delegates to the latest callbacks
-  const [handlersVersion, setHandlersVersion] = useState(0);
-
-  // Force handler update when callbacks change
+  // Keep ref in sync with latest callbacks each render
   useEffect(() => {
-    setHandlersVersion(v => v + 1);
-  }, [callbacks.onProgress, callbacks.onHtml, callbacks.onComplete]);
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
 
   const genWs = useHardenedWs({
     url: '/?XTransformPort=3002',
@@ -144,24 +140,19 @@ export function useGenerationWs(callbacks: GenerationCallbacks, options?: UseGen
     reconnectMaxDelay: 30000,
     enableReplay: true,
     handlers: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      generation_progress: (payload: any) => {
+      generation_progress: (payload: unknown) => {
         callbacksRef.current.onProgress(payload as GenerationProgressEvent);
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      generation_html: (payload: any) => {
+      generation_html: (payload: unknown) => {
         callbacksRef.current.onHtml(payload as GenerationHtmlEvent);
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      generation_complete: (payload: any) => {
+      generation_complete: (payload: unknown) => {
         callbacksRef.current.onComplete(payload as GenerationCompleteEvent);
       },
       pipeline_resumed: () => {
         callbacksRef.current.onPipelineResumed?.();
       },
     },
-    // Include handlersVersion to force re-creation when handlers change
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   });
 
   // Notify parent of connection state changes

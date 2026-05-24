@@ -300,8 +300,10 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   const optionsRef = useRef(options);
 
   // Keep refs in sync with latest values each render
-  handlersRef.current = handlers;
-  optionsRef.current = options;
+  useEffect(() => {
+    handlersRef.current = handlers;
+    optionsRef.current = options;
+  }, [handlers, options]);
 
   // ---------------------------------------------------------------------------
   // Helper: Transition connection state (ref + state)
@@ -880,7 +882,7 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   // Return value
   // ---------------------------------------------------------------------------
   return {
-    // eslint-disable-next-line react-hooks/rules-of-hooks -- socket ref is safe to expose for advanced usage
+    // eslint-disable-next-line react-hooks/refs -- socket ref is safe to expose; reading .current during render is intentional
     socket: socketRef.current as Socket | null,
     state,
     isConnected: state === 'connected',
