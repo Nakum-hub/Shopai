@@ -7,6 +7,9 @@
 // This hook is designed to be used within the builder-view component for
 // real-time website generation pipeline communication.
 //
+// AUDIT #10 — Now fetches a JWT auth token from /api/ws-token before
+// connecting, ensuring all WebSocket traffic is authenticated.
+//
 // Features inherited from useHardenedWs:
 //   - Exponential backoff reconnection
 //   - Message acknowledgment with retries
@@ -14,7 +17,7 @@
 //   - Backpressure signal detection
 //   - Rate limit handling
 //   - Server shutdown graceful handling
-//   - Connection health monitoring
+//   - Connection health monitoring & metrics
 //   - Message replay on reconnect
 // =============================================================================
 
@@ -121,20 +124,93 @@ export interface UseGenerationWsReturn {
 }
 
 // =============================================================================
+// Token Management
+// =============================================================================
+
+interface WsTokenResponse {
+  success: boolean;
+  token?: string;
+  sessionId?: string;
+  error?: string;
+}
+
+/**
+ * Fetch a JWT token from the /api/ws-token endpoint.
+ * Retries up to 3 times with exponential backoff.
+ */
+async function fetchWsToken(): Promise<WsTokenResponse> {
+  const maxRetries = 3;
+  const baseDelay = 1000;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const res = await fetch('/api/ws-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ capabilities: ['generation', 'voice'] }),
+      });
+
+      if (!res.ok) {
+        console.warn(`[WsToken] Token request failed: HTTP ${res.status} (attempt ${attempt + 1}/${maxRetries})`);
+        continue;
+      }
+
+      return await res.json();
+    } catch (err) {
+      console.warn(`[WsToken] Token fetch error (attempt ${attempt + 1}/${maxRetries}):`, err);
+    }
+
+    if (attempt < maxRetries - 1) {
+      const delay = baseDelay * Math.pow(2, attempt);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  return { success: false, error: 'Failed to obtain WebSocket token after retries' };
+}
+
+// =============================================================================
 // Hook Implementation
 // =============================================================================
 
 export function useGenerationWs(callbacks: GenerationCallbacks, options?: UseGenerationWsOptions): UseGenerationWsReturn {
   const callbacksRef = useRef(callbacks);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [tokenLoading, setTokenLoading] = useState(false);
 
   // Keep ref in sync with latest callbacks each render
   useEffect(() => {
     callbacksRef.current = callbacks;
   }, [callbacks]);
 
+  // Fetch token on mount
+  useEffect(() => {
+    let cancelled = false;
+    setTokenLoading(true);
+
+    (async () => {
+      if (cancelled) return;
+      const result = await fetchWsToken();
+      if (cancelled) return;
+
+      if (result.success && result.token) {
+        setAuthToken(result.token);
+        console.log('[WsToken] Token obtained successfully, sessionId:', result.sessionId);
+      } else {
+        console.warn('[WsToken] Token fetch failed:', result.error);
+      }
+      setTokenLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const genWs = useHardenedWs({
     url: '/?XTransformPort=3002',
-    autoConnect: options?.autoConnect ?? false,
+    autoConnect: !!authToken && (options?.autoConnect ?? false),
+    authToken: authToken || undefined,
     maxReconnectAttempts: 10,
     reconnectBaseDelay: 1000,
     reconnectMaxDelay: 30000,
@@ -162,6 +238,9 @@ export function useGenerationWs(callbacks: GenerationCallbacks, options?: UseGen
 
   const startGeneration = useCallback(
     (storefrontId: string, businessProfile: Record<string, unknown>, voiceTranscript?: string) => {
+      if (!genWs.isConnected && !tokenLoading) {
+        console.warn('[GenerationWs] Attempting to start generation while not connected and no token loading');
+      }
       genWs.emit(
         'start_generation',
         {
@@ -177,7 +256,7 @@ export function useGenerationWs(callbacks: GenerationCallbacks, options?: UseGen
         },
       );
     },
-    [genWs],
+    [genWs, tokenLoading],
   );
 
   const cancelGeneration = useCallback(
