@@ -427,3 +427,102 @@ Stage Summary:
 - 10 images regenerated with English-only text enforcement
 - All 61 template images verified clean via VLM
 - No non-English text remaining in any template image
+---
+Task ID: 8
+Agent: Main Agent
+Task: Audit #8 — Template System Operational Strength (10 missing systems)
+
+Work Log:
+- Built 10 new infrastructure modules totaling 3,773 lines of production TypeScript
+- Zero ESLint errors, zero TypeScript errors confirmed
+- All files are defensive (try/catch, safe defaults), fully JSDoc-documented
+
+Created Files:
+1. src/lib/template-schema.ts (444 lines)
+   - Zod-based schema validation for all template types
+   - TemplateSchemaValidator: validateTemplate, validateSection, validateStyle, validateSectionsComposition, validateCategoryConsistency
+   - Per-category section requirements (CATEGORY_SECTION_REQUIREMENTS, CATEGORY_RECOMMENDED)
+   - Color contrast validation between primary/secondary (WCAG 3:1 minimum)
+   - Approved font family list (70+ Google Fonts)
+   - Mood vocabulary validation (30 curated moods)
+   - FullTemplateSchema with id pattern, name, description, preview URL, sections, style
+
+2. src/lib/section-normalizer.ts (256 lines)
+   - SECTION_METADATA: 16 section types with requiredFor/recommendedFor categories, defaultConfig, maxCount, recommendedOrder
+   - SectionNormalizer: normalize, mergeSections, deduplicateSections, fillMissingSections, validateSectionCount, getSectionRecommendations, generateSectionConfig
+   - CATEGORY_ORDER overrides for restaurant, salon, bakery, medical, boutique
+   - Canonical section ordering per business category
+
+3. src/lib/design-constraints.ts (440 lines)
+   - ColorConstraints: validateColorContrast (WCAG AA/AAA), validateColorHarmony (HSL-based), getAccessibleAlternatives
+   - TypographyConstraints: validateFontStack, validateFontSizeScale (modular scale), validateLineHeight, validateFontWeightPair
+   - LayoutConstraints: validateLayoutRules (nesting, CTA count, image count, overflow), validateSpacingConsistency (4px/8px grid), validateResponsiveBreakpoints
+   - ContentConstraints: validateContentQuality, validateHeadingHierarchy, validateSEOContent
+   - LAYOUT_CONSTRAINTS, CONTENT_CONSTRAINTS, STANDARD_BREAKPOINTS, SAFE_FONT_STACKS constants
+
+4. src/lib/theme-inheritance.ts (388 lines)
+   - ThemeDefinition interface with colors, typography, spacing, effects, metadata
+   - 10 built-in themes: light, dark, warm, cool, minimal, elegant, playful, professional, nature, vibrant
+   - ThemeRegistry: register, get, has, remove, list
+   - ThemeResolver: resolve (full inheritance chain), mergeWithOverrides, exportToCSS, exportToTailwind, diffThemes, createChildTheme
+   - CSS custom properties generation, Tailwind config extension generation
+
+5. src/lib/responsive-verification.ts (280 lines)
+   - ResponsiveAnalyzer: generateReport, analyzeMediaQueries, analyzeFixedSizes, analyzeOverflowRisks, analyzeTouchTargets, analyzeResponsiveImages
+   - Mobile-first vs desktop-first detection
+   - Standard breakpoint completeness check (sm/md/lg/xl/2xl)
+   - 44px touch target validation, table overflow detection, lazy loading check
+
+6. src/lib/accessibility-auditor.ts (461 lines)
+   - WCAG 2.1 AA automated auditing engine
+   - Semantic checks: heading hierarchy, landmark regions, image alt text, link text, iframe titles, button names, form labels
+   - Color contrast checks: WCAG AA (4.5:1), AAA (7:0), large text (3:1)
+   - ARIA checks: aria-hidden focusable children, positive tabindex
+   - Deprecated element detection: center, font, marquee, blink
+   - Skip navigation link detection
+   - AccessibilityReport with wcagLevel, impactCounts, violations/warnings/passes
+
+7. src/lib/lighthouse-engine.ts (340 lines)
+   - Static analysis-based Lighthouse simulation (no Puppeteer dependency)
+   - PerformanceAudit: HTML size, CSS size, viewport meta, render-blocking resources, image lazy loading, DOM complexity, HTTPS resources
+   - SEOAudit: title, meta description, H1, robots, Open Graph, image alt, canonical
+   - BestPracticesAudit: DOCTYPE, charset, viewport, HTTPS, deprecated tags, inline error handlers, responsive CSS
+   - PWAAudit: manifest, service worker, viewport, theme-color
+   - Weighted overall score (perf 30%, a11y 25%, bp 25%, seo 15%, pwa 5%)
+
+8. src/lib/hydration-guard.ts (258 lines)
+   - 6 risk categories: date, client-api, random, state, storage, conditional
+   - DATE_PATTERNS: new Date(), Date.now(), toLocaleDateString, getHours etc.
+   - CLIENT_API_PATTERNS: window, document, navigator, localStorage, sessionStorage, location, geolocation, matchMedia
+   - RANDOM_PATTERNS: Math.random(), crypto.randomUUID()
+   - STORAGE_PATTERNS: localStorage.getItem/setItem, sessionStorage, cookie
+   - guard(html) → HydrationReport with riskScore, risks, fixes
+   - autoFix(html) → { html, fixes[] }
+   - False positive detection (filters out matches inside HTML comments)
+
+9. src/lib/design-tokens.ts (434 lines)
+   - TokenRegistry: registerTokenSet, getToken (with alias chain resolution), getTokensByCategory, getTokensByGroup
+   - TokenValidator: validateColorTokens, validateSpacingTokens, validateTypographyTokens, validateNamingConvention, validateCompleteSet
+   - TokenGenerator: generateColorScale (HSL-based, 50-950), generateSpacingScale (8px base), generateTypeScale (modular ratio)
+   - TokenExporter: exportToCSS (custom properties), exportToTailwind, exportToJSON (W3C format)
+   - Default token set: storecraft-default with gray scale, semantic colors, spacing scale, typography scale, border radii, shadows
+
+10. src/lib/template-operations.ts (472 lines)
+    - TemplateOperations class: unified API wiring all 9 modules together
+    - Validation Pipeline: quickValidate, fullAudit, productionValidate (>=85 threshold)
+    - Individual: validateSchema, validateResponsive, validateAccessibility, validateDesign, validateHydration, runLighthouse
+    - Transformation: normalizeSections, fillMissingSections
+    - UnifiedReport: overallScore, grade (A+ to F), 8 category scores, criticalIssues, warnings, recommendations
+    - Score weights: schema 15%, responsive 15%, a11y 20%, performance 15%, seo 10%, design 10%, tokens 5%, hydration 10%
+    - Batch operations: batchValidate, batchAudit, batchScore
+    - generateHtmlReport for validating generated HTML output
+    - Lazy module loading with graceful fallback
+
+Stage Summary:
+- 10 new files, 3,773 lines of production TypeScript
+- All 9 missing operational systems built: schema validation, section normalization, design constraints, theme inheritance, responsive verification, accessibility auditing, lighthouse scoring, hydration protection, design tokens
+- 1 unified registry (template-operations.ts) wiring everything together
+- Zero ESLint errors, zero TypeScript errors
+- Defensive design throughout: try/catch, safe defaults, graceful degradation
+- All validators run independently and via unified pipeline
+- Grade system (A+/A/B/C/D/F) for template quality scoring
