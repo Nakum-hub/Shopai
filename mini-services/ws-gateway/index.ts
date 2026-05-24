@@ -226,6 +226,9 @@ const activeConnections = new Map<string, ConnectionInfo>();
 const sessionConnections = new Map<string, Set<string>>();
 const messageCounters = new Map<string, { count: number; resetAt: number }>();
 
+/** WeakMap of socket.id → Socket for backpressure recovery signals (avoids memory leaks). */
+const socketRef = new WeakMap<string, Socket>();
+
 // =============================================================================
 // Message Replay Ring Buffer
 // =============================================================================
@@ -342,11 +345,17 @@ function checkEventRateLimit(socketId: string, event: string, config: WsGatewayC
   return true;
 }
 
-// Periodic cleanup of rate limit counters
+// Periodic cleanup of rate limit counters — also reset rate_limited state for clients
 setInterval(() => {
   const now = Date.now();
   for (const [key, counter] of messageCounters) {
     if (counter.resetAt <= now) {
+      // Emit rate_limit_resolved to the socket if still connected
+      const socketId = key.split(':')[0];
+      const socket = socketRef.get(socketId);
+      if (socket) {
+        socket.emit('rate_limit_resolved', { event: key.split(':')[1], message: 'Rate limit window reset' });
+      }
       messageCounters.delete(key);
     }
   }
@@ -373,6 +382,7 @@ function handleBackpressure(conn: ConnectionInfo, event: string, data: unknown):
       case 'block':
         return false;
     }
+  }
 
   // If buffer was near capacity and now has room, notify client
   if (wasNearCapacity && conn.backpressureBuffer.length < maxSize * BACKPRESSURE_RECOVERY_THRESHOLD) {
@@ -380,8 +390,6 @@ function handleBackpressure(conn: ConnectionInfo, event: string, data: unknown):
       bufferSize: conn.backpressureBuffer.length,
       message: 'Server output buffer recovered to normal levels.',
     });
-  }
-    }
   }
 
   // Track socket reference for backpressure recovery notification
