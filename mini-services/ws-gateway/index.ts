@@ -467,19 +467,36 @@ function createAuthMiddleware(nsConfig: NamespaceConfig, config: WsGatewayConfig
     });
 
     // Handle replay request
-    socket.on('request_replay', (data: { fromTimestamp?: number; limit?: number }) => {
+    socket.on('request_replay', async (data: { fromTimestamp?: number; limit?: number }) => {
       const conn = activeConnections.get(socket.id);
       if (!conn) return;
 
+      // 1. Get in-memory replay messages
       const messages = getReplayMessages(nsConfig.name, data?.fromTimestamp || conn.replayFrom, data?.limit || 100);
-      socket.emit('replay_start', { count: messages.length, fromTimestamp: data?.fromTimestamp });
 
-      for (const msg of messages) {
+      // 2. Also retrieve persisted offline messages from Redis
+      let offlineMessages: QueuedMessage[] = [];
+      if (PERSISTENCE_ENABLED) {
+        try {
+          offlineMessages = await retrieveOfflineMessages(conn.sessionId);
+          if (offlineMessages.length > 0) {
+            console.log(`[WS-Persistence] Retrieved ${offlineMessages.length} offline messages for session=${conn.sessionId}`);
+          }
+        } catch {
+          // Silently fall back to in-memory only
+        }
+      }
+
+      const allMessages = [...offlineMessages, ...messages];
+
+      socket.emit('replay_start', { count: allMessages.length, fromTimestamp: data?.fromTimestamp });
+
+      for (const msg of allMessages) {
         socket.emit(msg.event, msg.data);
       }
 
-      socket.emit('replay_complete', { count: messages.length });
-      console.log(`[WS-Replay] Replayed ${messages.length} messages to socket ${socket.id}`);
+      socket.emit('replay_complete', { count: allMessages.length });
+      console.log(`[WS-Replay] Replayed ${allMessages.length} messages to socket ${socket.id} (${offlineMessages.length} from offline queue)`);
     });
 
     console.log(`[WS-Auth] Socket ${socket.id} authenticated for session ${result.sessionId} on ${nsConfig.name}`);
@@ -537,10 +554,25 @@ function untrackConnection(socketId: string): void {
 
   const sessionKey = `${conn.sessionId}:${conn.namespace}`;
   const conns = sessionConnections.get(sessionKey);
+  const noOtherConnections = !conns || conns.size === 0;
+
   if (conns) {
     conns.delete(socketId);
     if (conns.size === 0) {
       sessionConnections.delete(sessionKey);
+    }
+  }
+
+  // Persist latest replay buffer messages to Redis when last connection drops
+  if (noOtherConnections && PERSISTENCE_ENABLED) {
+    const buffer = replayBuffers.get(conn.namespace);
+    if (buffer && buffer.length > 0) {
+      // Persist last 50 messages to Redis for offline recovery
+      const recentMessages = buffer.slice(-50);
+      for (const entry of recentMessages) {
+        persistOfflineMessage(conn.sessionId, entry.event, entry.data).catch(() => {});
+      }
+      console.log(`[WS-Persistence] Persisted ${recentMessages.length} messages for offline session=${conn.sessionId}`);
     }
   }
 
@@ -795,6 +827,274 @@ function getGatewayDiagnostics(): GatewayDiagnostics {
 }
 
 // =============================================================================
+// Redis Queue Persistence (Zero External Dependencies)
+// =============================================================================
+// Uses a lightweight inline Redis client built on node:net for RESP protocol.
+// When Redis is unavailable, falls back to in-memory TTL-based queue.
+
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const OFFLINE_QUEUE_TTL_SECONDS = 300; // 5 minutes
+const OFFLINE_QUEUE_PREFIX = 'ws:offline:';
+const PERSISTENCE_ENABLED = DEFAULT_CONFIG.enableQueuePersistence;
+
+interface RedisClient {
+  connected: boolean;
+  socket: import('net').Socket | null;
+  queue: Array<{ command: string[]; resolve: (value: unknown) => void; reject: (err: Error) => void }>;
+  buffer: string;
+  processing: boolean;
+}
+
+let redisClient: RedisClient | null = null;
+
+function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
+  try {
+    const parsed = new URL(url);
+    return {
+      host: parsed.hostname || 'localhost',
+      port: parseInt(parsed.port || '6379', 10),
+      password: parsed.password || undefined,
+    };
+  } catch {
+    return { host: 'localhost', port: 6379 };
+  }
+}
+
+function createInlineRedisClient(url: string): RedisClient {
+  const { host, port, password } = parseRedisUrl(url);
+  const client: RedisClient = {
+    connected: false,
+    socket: null,
+    queue: [],
+    buffer: '',
+    processing: false,
+  };
+
+  const connect = () => {
+    try {
+      const sock = new net.Socket();
+      sock.setEncoding('utf-8');
+      sock.setTimeout(5000);
+
+      sock.on('connect', () => {
+        client.connected = true;
+        client.socket = sock;
+        console.log('[WS-Persistence] Connected to Redis for offline queue');
+        // Authenticate if password provided
+        if (password) {
+          sendRedisCommand(client, 'AUTH', password).catch(() => {});
+        }
+        processQueue(client);
+      });
+
+      sock.on('data', (data: string) => {
+        client.buffer += data;
+        processResponses(client);
+      });
+
+      sock.on('error', (err: Error) => {
+        client.connected = false;
+        client.socket = null;
+        console.warn(`[WS-Persistence] Redis connection error: ${err.message}`);
+        // Retry connection after 5 seconds
+        setTimeout(connect, 5000);
+      });
+
+      sock.on('close', () => {
+        client.connected = false;
+        client.socket = null;
+      });
+
+      sock.on('timeout', () => {
+        sock.destroy();
+      });
+
+      sock.connect(port, host);
+    } catch (err) {
+      console.warn('[WS-Persistence] Failed to create Redis connection:', err);
+      setTimeout(connect, 5000);
+    }
+  };
+
+  connect();
+  return client;
+}
+
+function sendRedisCommand(client: RedisClient, ...args: string[]): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    client.queue.push({ command: args, resolve, reject });
+    if (client.connected && client.socket) {
+      writeCommand(client);
+    }
+  });
+}
+
+function writeCommand(client: RedisClient): void {
+  if (!client.socket || !client.connected) return;
+  const item = client.queue[0];
+  if (!item) return;
+
+  const { command } = item;
+  const parts = command.map(c => `\$${Buffer.byteLength(c)}\r\n${c}\r\n`).join('');
+  const cmd = `*${command.length}\r\n${parts}`;
+  client.socket.write(cmd);
+}
+
+function processQueue(client: RedisClient): void {
+  if (client.queue.length === 0 || !client.connected) return;
+  writeCommand(client);
+}
+
+function processResponses(client: RedisClient): void {
+  while (client.buffer.length > 0 && client.queue.length > 0) {
+    const type = client.buffer[0];
+    if (type === '+') {
+      // Simple string
+      const end = client.buffer.indexOf('\r\n');
+      if (end === -1) break;
+      client.buffer = client.buffer.slice(end + 2);
+      const item = client.queue.shift()!;
+      item.resolve(true);
+    } else if (type === ':') {
+      // Integer
+      const end = client.buffer.indexOf('\r\n');
+      if (end === -1) break;
+      const value = parseInt(client.buffer.slice(1, end), 10);
+      client.buffer = client.buffer.slice(end + 2);
+      const item = client.queue.shift()!;
+      item.resolve(value);
+    } else if (type === '$') {
+      // Bulk string
+      const end = client.buffer.indexOf('\r\n');
+      if (end === -1) break;
+      const len = parseInt(client.buffer.slice(1, end), 10);
+      if (len === -1) {
+        client.buffer = client.buffer.slice(end + 2);
+        const item = client.queue.shift()!;
+        item.resolve(null);
+      } else {
+        const start = end + 2;
+        if (client.buffer.length < start + len + 2) break;
+        const value = client.buffer.slice(start, start + len);
+        client.buffer = client.buffer.slice(start + len + 2);
+        const item = client.queue.shift()!;
+        item.resolve(value);
+      }
+    } else if (type === '*') {
+      // Array
+      const end = client.buffer.indexOf('\r\n');
+      if (end === -1) break;
+      const count = parseInt(client.buffer.slice(1, end), 10);
+      if (count === -1) {
+        client.buffer = client.buffer.slice(end + 2);
+        const item = client.queue.shift()!;
+        item.resolve(null);
+      } else {
+        // For simplicity, skip array processing (not needed for our use case)
+        client.buffer = client.buffer.slice(end + 2);
+        const item = client.queue.shift()!;
+        item.resolve(count);
+      }
+    } else if (type === '-') {
+      // Error
+      const end = client.buffer.indexOf('\r\n');
+      if (end === -1) break;
+      const msg = client.buffer.slice(1, end);
+      client.buffer = client.buffer.slice(end + 2);
+      const item = client.queue.shift()!;
+      item.reject(new Error(msg));
+    } else {
+      break;
+    }
+  }
+  processQueue(client);
+}
+
+// In-memory fallback for offline queue (when Redis unavailable)
+const offlineQueueMemory = new Map<string, QueuedMessage[]>();
+
+async function persistOfflineMessage(sessionId: string, event: string, data: unknown): Promise<void> {
+  if (!PERSISTENCE_ENABLED) return;
+
+  const key = `${OFFLINE_QUEUE_PREFIX}${sessionId}`;
+  const message = JSON.stringify({ event, data, timestamp: Date.now() });
+
+  if (redisClient?.connected) {
+    try {
+      await sendRedisCommand(redisClient, 'LPUSH', key, message);
+      await sendRedisCommand(redisClient, 'EXPIRE', key, String(OFFLINE_QUEUE_TTL_SECONDS));
+      return;
+    } catch {
+      console.warn('[WS-Persistence] Redis write failed, falling back to memory');
+    }
+  }
+
+  // In-memory fallback
+  const queue = offlineQueueMemory.get(sessionId) || [];
+  queue.push({ id: `offline-${Date.now()}`, event, data, timestamp: Date.now() });
+  if (queue.length > 500) queue.splice(0, queue.length - 500);
+  offlineQueueMemory.set(sessionId, queue);
+}
+
+async function retrieveOfflineMessages(sessionId: string): Promise<QueuedMessage[]> {
+  if (!PERSISTENCE_ENABLED) return [];
+
+  const key = `${OFFLINE_QUEUE_PREFIX}${sessionId}`;
+
+  if (redisClient?.connected) {
+    try {
+      const count = await sendRedisCommand(redisClient, 'LLEN', key) as number;
+      if (typeof count === 'number' && count > 0) {
+        const messages: QueuedMessage[] = [];
+        // Read all messages
+        for (let i = 0; i < Math.min(count, 200); i++) {
+          const raw = await sendRedisCommand(redisClient, 'RPOP', key) as string | null;
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              messages.push({
+                id: `offline-replay-${i}`,
+                event: parsed.event,
+                data: parsed.data,
+                timestamp: parsed.timestamp,
+              });
+            } catch {
+              // Skip malformed messages
+            }
+          }
+        }
+        // Clean up remaining
+        await sendRedisCommand(redisClient, 'DEL', key).catch(() => {});
+        return messages;
+      }
+      return [];
+    } catch {
+      console.warn('[WS-Persistence] Redis read failed, falling back to memory');
+    }
+  }
+
+  // In-memory fallback
+  const messages = offlineQueueMemory.get(sessionId) || [];
+  offlineQueueMemory.delete(sessionId);
+  return messages;
+}
+
+// Initialize Redis client if persistence is enabled
+if (PERSISTENCE_ENABLED) {
+  redisClient = createInlineRedisClient(REDIS_URL);
+  // Periodic cleanup of stale in-memory queues
+  setInterval(() => {
+    const now = Date.now();
+    const maxAge = OFFLINE_QUEUE_TTL_SECONDS * 1000;
+    for (const [sid, msgs] of offlineQueueMemory) {
+      if (msgs.length > 0 && now - msgs[msgs.length - 1].timestamp > maxAge) {
+        offlineQueueMemory.delete(sid);
+      }
+    }
+  }, 60_000).unref();
+}
+
+// =============================================================================
 // HTTP Health Endpoint
 // =============================================================================
 
@@ -814,6 +1114,11 @@ function handleHealth(_req: IncomingMessage, res: ServerResponse): void {
       byNamespace: diagnostics.connectionsByNamespace,
     },
     replayBuffers: diagnostics.replayBufferSizes,
+    persistence: {
+      enabled: PERSISTENCE_ENABLED,
+      redisConnected: redisClient?.connected ?? false,
+      offlineQueues: offlineQueueMemory.size,
+    },
   }, null, 2));
 }
 

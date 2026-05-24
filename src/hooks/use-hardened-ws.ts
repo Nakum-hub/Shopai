@@ -381,23 +381,6 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Helper: Flush the offline message queue to the server
-  // ---------------------------------------------------------------------------
-  const flushQueue = useCallback((socket: Socket) => {
-    const queue = messageQueueRef.current;
-    if (queue.length === 0) return;
-
-    // Take all messages out atomically
-    const toSend = queue.splice(0);
-
-    for (const msg of toSend) {
-      sendWithOptionalAck(socket, msg.event, msg.data, msg.options);
-    }
-
-    flushMetrics();
-  }, [flushMetrics]);
-
-  // ---------------------------------------------------------------------------
   // Helper: Send a single message with optional ack tracking
   // ---------------------------------------------------------------------------
   const sendWithOptionalAck = useCallback(
@@ -461,6 +444,23 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
     },
     [flushMetrics],
   );
+
+  // ---------------------------------------------------------------------------
+  // Helper: Flush the offline message queue to the server
+  // ---------------------------------------------------------------------------
+  const flushQueue = useCallback((socket: Socket) => {
+    const queue = messageQueueRef.current;
+    if (queue.length === 0) return;
+
+    // Take all messages out atomically
+    const toSend = queue.splice(0);
+
+    for (const msg of toSend) {
+      sendWithOptionalAck(socket, msg.event, msg.data, msg.options);
+    }
+
+    flushMetrics();
+  }, [flushMetrics, sendWithOptionalAck]);
 
   // ---------------------------------------------------------------------------
   // Core: Create socket, attach handlers, connect
@@ -880,7 +880,8 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   // Return value
   // ---------------------------------------------------------------------------
   return {
-    socket: socketRef.current,
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- socket ref is safe to expose for advanced usage
+    socket: socketRef.current as Socket | null,
     state,
     isConnected: state === 'connected',
     metrics,

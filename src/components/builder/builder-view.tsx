@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { io, Socket } from 'socket.io-client';
+import { useGenerationWs } from '@/hooks/use-generation-ws';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -270,6 +270,70 @@ function VoiceInputSection() {
 
   const [textInput, setTextInput] = useState('');
   const [showTextInput, setShowTextInput] = useState(false);
+
+  // --- Hardened WebSocket for generation pipeline ---
+  const {
+    isConnected: wsConnected,
+    disconnect: wsDisconnect,
+    startGeneration: wsStartGeneration,
+  } = useGenerationWs({
+    onProgress: (data) => {
+      updateGenerationStatus(data.status, data.message, data.progress);
+      if (data.logs && data.logs.length > 0) {
+        const currentLogIds = new Set(
+          useAppStore.getState().currentJob?.logs.map(l => l.id) || []
+        );
+        for (const log of data.logs) {
+          if (!currentLogIds.has(log.id)) {
+            addGenerationLog({
+              level: log.level,
+              agent: log.agent,
+              message: log.message,
+              detail: log.detail,
+            });
+          }
+        }
+      }
+    },
+    onHtml: (data) => {
+      console.log(`[Builder] HTML received: ${(data.html.length / 1024).toFixed(1)}KB, score: ${data.validationScore}/100, time: ${(data.generationTimeMs / 1000).toFixed(1)}s`);
+      if (!generationCompletedRef.current) {
+        finalizeGenerationRefRef.current(data.html, data.storefrontId);
+      }
+    },
+    onComplete: (data) => {
+      if (data.success) {
+        if (data.html && !generationCompletedRef.current) {
+          finalizeGenerationRefRef.current(data.html, data.storefrontId);
+        }
+      } else {
+        updateGenerationStatus('error', 'Generation failed on the server', 0);
+        setSimStage('ready');
+        showToast({
+          title: 'Generation Failed',
+          description: 'The server reported an error during generation. Please try again.',
+          variant: 'destructive',
+        });
+      }
+      wsDisconnect();
+    },
+    onPipelineResumed: () => {
+      console.log('[Builder] Pipeline resumed after reconnection');
+      showToast({
+        title: 'Pipeline Resumed',
+        description: 'Your generation pipeline has been resumed after a brief disconnection.',
+      });
+    },
+    onError: (error) => {
+      updateGenerationStatus('error', 'Connection failed', 0);
+      setSimStage('ready');
+      showToast({
+        title: 'Connection Error',
+        description: error || 'Could not connect to the generation service. Please try again.',
+        variant: 'destructive',
+      });
+    },
+  });
   const [simStage, setSimStage] = useState<
     'idle' | 'transcribing' | 'analyzing' | 'chatting' | 'ready' | 'generating' | 'complete'
   >('idle');
@@ -277,9 +341,9 @@ function VoiceInputSection() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const simTimerRef = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const socketRef = useRef<Socket | null>(null);
   const mountedRef = useRef(true);
   const generationCompletedRef = useRef(false);
+  const finalizeGenerationRefRef = useRef<(html: string, storefrontId: string) => void>(() => {});
   const { toast: showToast } = useToast();
   const sessionIdRef = useRef<string>(`builder-${Date.now()}`);
   const [activeQuickReplies, setActiveQuickReplies] = useState<string[]>([]);
@@ -380,10 +444,7 @@ function VoiceInputSection() {
       mountedRef.current = false;
       simTimerRef.current.forEach(clearTimeout);
       if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
-      if (socketRef.current?.connected) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      wsDisconnect();
       // Stop any active media recorder
       if (mediaRecorderRef.current?.state === 'recording') {
         mediaRecorderRef.current.stop();
@@ -658,6 +719,11 @@ function VoiceInputSection() {
   // Helper to finalize generation with the generated HTML
   const finalizeGeneration = useCallback(
     async (generatedHtml: string, storefrontId: string, profile: BusinessProfile) => {
+      // Keep a ref to a simplified version for WS callbacks
+      finalizeGenerationRefRef.current = (html: string, sfId: string) => {
+        finalizeGeneration(html, sfId, useAppStore.getState().businessProfile || profile);
+      };
+
       const now = new Date().toISOString();
 
       // Create a new storefront with the generated HTML
@@ -752,7 +818,7 @@ function VoiceInputSection() {
       currentStep: 0,
       totalSteps: PIPELINE_STEPS.length,
       progress: 0,
-      message: 'Starting generation pipeline...',
+      message: 'Starting generation pipeline (hardened WebSocket)...',
       startedAt: new Date().toISOString(),
       completedAt: null,
       voiceTranscript: voiceTranscript,
@@ -762,103 +828,17 @@ function VoiceInputSection() {
     setCurrentJob(newJob);
     setSimStage('generating');
 
-    // --- Connect to WebSocket for real-time orchestration ---
-    // The generation service now runs the FULL pipeline including LLM-powered HTML generation
-    const socket = io('/?XTransformPort=3002', {
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: 5,
-      reconnectionDelay: 2000,
-      timeout: 120000,
-    });
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log('[Builder] WebSocket connected to orchestration service:', socket.id);
-      socket.emit('start_generation', {
-        storefrontId,
-        businessProfile: profileToUse,
-      });
-    });
-
-    socket.on('generation_progress', (data: {
-      storefrontId: string;
-      status: GenerationStatus;
-      message: string;
-      progress: number;
-      agent: string;
-      logs: GenerationLog[];
-    }) => {
-      updateGenerationStatus(data.status, data.message, data.progress);
-
-      if (data.logs && data.logs.length > 0) {
-        const currentLogIds = new Set(
-          useAppStore.getState().currentJob?.logs.map(l => l.id) || []
-        );
-        for (const log of data.logs) {
-          if (!currentLogIds.has(log.id)) {
-            addGenerationLog({
-              level: log.level,
-              agent: log.agent,
-              message: log.message,
-              detail: log.detail,
-            });
-          }
-        }
-      }
-    });
-
-    // The orchestration service sends the final HTML via this event
-    socket.on('generation_html', (data: {
-      storefrontId: string;
-      html: string;
-      validationScore: number;
-      generationTimeMs: number;
-    }) => {
-      console.log(`[Builder] HTML received from orchestration: ${(data.html.length / 1024).toFixed(1)}KB, validation: ${data.validationScore}/100, time: ${(data.generationTimeMs / 1000).toFixed(1)}s`);
-      if (!generationCompletedRef.current) {
-        finalizeGeneration(data.html, storefrontId, profileToUse);
-      }
-    });
-
-    socket.on('generation_complete', (data: {
-      storefrontId: string;
-      success: boolean;
-      html?: string;
-      validationScore?: number;
-      generationTimeMs?: number;
-    }) => {
-      if (data.success) {
-        // If HTML was bundled in the complete event (fallback), finalize with it
-        if (data.html && !generationCompletedRef.current) {
-          finalizeGeneration(data.html, storefrontId, profileToUse);
-        }
-      } else {
-        updateGenerationStatus('error', 'Generation failed on the server', 0);
-        setSimStage('ready');
-        showToast({
-          title: 'Generation Failed',
-          description: 'The server reported an error during generation. Please try again.',
-          variant: 'destructive',
-        });
-      }
-
-      if (socketRef.current?.connected) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-    });
-
-    socket.on('connect_error', (err) => {
-      console.error('[Builder] WebSocket connection error:', err.message);
-      showToast({
-        title: 'Connection Error',
-        description: 'Could not connect to the generation service. Please try again.',
-        variant: 'destructive',
-      });
-      updateGenerationStatus('error', 'Connection failed', 0);
-      setSimStage('ready');
-    });
-  }, [voiceTranscript, businessProfile, setCurrentJob, updateGenerationStatus, addGenerationLog, finalizeGeneration, showToast]);
+    // --- Send generation request via hardened WebSocket ---
+    // The useGenerationWs hook handles:
+    //   - Auto-connect with exponential backoff reconnection
+    //   - Message acknowledgment with retries
+    //   - Offline queue with auto-flush on reconnect
+    //   - Backpressure signals
+    //   - Server shutdown handling
+    //   - Connection health monitoring & metrics
+    //   - Message replay on reconnect
+    wsStartGeneration(storefrontId, profileToUse, voiceTranscript);
+  }, [voiceTranscript, businessProfile, setCurrentJob, wsStartGeneration]);
 
   const handleTextSubmit = async () => {
     if (!textInput.trim()) return;
@@ -934,11 +914,8 @@ function VoiceInputSection() {
       clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = null;
     }
-    // Disconnect WebSocket
-    if (socketRef.current?.connected) {
-      socketRef.current.disconnect();
-      socketRef.current = null;
-    }
+    // Disconnect hardened WebSocket
+    wsDisconnect();
     // Stop any active media recorder
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
