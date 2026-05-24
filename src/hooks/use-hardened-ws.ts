@@ -465,6 +465,9 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   // ---------------------------------------------------------------------------
   // Core: Create socket, attach handlers, connect
   // ---------------------------------------------------------------------------
+  // Ref-based self-reference so nested scheduleReconnect can call us
+  const createAndConnectRef = useRef<() => void>(() => {});
+
   const createAndConnect = useCallback(() => {
     // Guard: already connected or connecting
     if (socketRef.current?.connected) return;
@@ -722,11 +725,14 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
           socketRef.current = null;
         }
 
-        // Recursively create a new connection
-        createAndConnect();
+        // Recursively create a new connection via ref
+        createAndConnectRef.current();
       }, delay);
     }
   }, [transitionState, flushMetrics, startTimers, flushQueue, sendWithOptionalAck]);
+
+  // Keep the ref in sync so scheduleReconnect can reach the latest version
+  createAndConnectRef.current = createAndConnect;
 
   // ---------------------------------------------------------------------------
   // Public: connect()
