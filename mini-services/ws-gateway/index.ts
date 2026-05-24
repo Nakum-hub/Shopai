@@ -48,6 +48,7 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { Server, Socket, Namespace, RemoteSocket } from 'socket.io';
 import crypto from 'node:crypto';
+import net from 'node:net';
 
 // =============================================================================
 // Configuration Types
@@ -355,8 +356,11 @@ setInterval(() => {
 // Backpressure Handler
 // =============================================================================
 
+const BACKPRESSURE_RECOVERY_THRESHOLD = 0.4; // 40% — emit resolved signal when buffer drains below this
+
 function handleBackpressure(conn: ConnectionInfo, event: string, data: unknown): boolean {
   const maxSize = DEFAULT_CONFIG.backpressureBufferSize;
+  const wasNearCapacity = conn.backpressureBuffer.length >= maxSize * 0.8;
 
   if (conn.backpressureBuffer.length >= maxSize) {
     switch (DEFAULT_CONFIG.backpressurePolicy) {
@@ -369,6 +373,20 @@ function handleBackpressure(conn: ConnectionInfo, event: string, data: unknown):
       case 'block':
         return false;
     }
+
+  // If buffer was near capacity and now has room, notify client
+  if (wasNearCapacity && conn.backpressureBuffer.length < maxSize * BACKPRESSURE_RECOVERY_THRESHOLD) {
+    socketRef.get(conn.socketId)?.emit('backpressure_resolved', {
+      bufferSize: conn.backpressureBuffer.length,
+      message: 'Server output buffer recovered to normal levels.',
+    });
+  }
+    }
+  }
+
+  // Track socket reference for backpressure recovery notification
+  if (!socketRef.has(conn.socketId)) {
+    socketRef.set(conn.socketId, conn);
   }
 
   conn.backpressureBuffer.push({
@@ -452,6 +470,14 @@ function createAuthMiddleware(nsConfig: NamespaceConfig, config: WsGatewayConfig
       const eventName = packet[0] as string;
       if (!checkEventRateLimit(socket.id, eventName, config)) {
         console.warn(`[WS-RateLimit] Socket ${socket.id} rate limited on event "${eventName}"`);
+        // Notify client of rate limit
+        const eventLimit = config.eventRateLimits[eventName] || config.maxMessagesPerMinute;
+        socket.emit('rate_limited', {
+          event: eventName,
+          limit: eventLimit,
+          message: `Rate limit exceeded for "${eventName}" (${eventLimit}/min)`,
+          retryAfterMs: 60_000,
+        });
         return nextFn(new Error(`Rate limit exceeded for event "${eventName}"`));
       }
       nextFn();
@@ -595,7 +621,26 @@ function hardenedEmit(socket: Socket, event: string, data: unknown): void {
   const accepted = handleBackpressure(conn, event, data);
   if (!accepted) {
     console.warn(`[WS-Backpressure] Dropped message "${event}" for socket ${socket.id} (policy: ${DEFAULT_CONFIG.backpressurePolicy})`);
+    // Signal backpressure to client
+    const usagePercent = Math.round((conn.backpressureBuffer.length / DEFAULT_CONFIG.backpressureBufferSize) * 100);
+    socket.emit('backpressure_warning', {
+      bufferSize: conn.backpressureBuffer.length,
+      max: DEFAULT_CONFIG.backpressureBufferSize,
+      usagePercent,
+      message: `Server output buffer is ${usagePercent}% full. Oldest message dropped.`,
+    });
     return;
+  }
+
+  // Notify client if buffer is getting full (80% threshold)
+  if (conn.backpressureBuffer.length >= DEFAULT_CONFIG.backpressureBufferSize * 0.8) {
+    const usagePercent = Math.round((conn.backpressureBuffer.length / DEFAULT_CONFIG.backpressureBufferSize) * 100);
+    socket.emit('backpressure_warning', {
+      bufferSize: conn.backpressureBuffer.length,
+      max: DEFAULT_CONFIG.backpressureBufferSize,
+      usagePercent,
+      message: 'Server output buffer approaching capacity.',
+    });
   }
 
   // Always add to replay buffer
