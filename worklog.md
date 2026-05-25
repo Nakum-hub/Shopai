@@ -927,3 +927,28 @@ Stage Summary:
 - All 6 previously reported UX defects confirmed already fixed
 - 3 lint errors fixed (react-hooks/refs, react-hooks/set-state-in-effect)
 - Project is clean: 0 lint errors, 0 type errors, dev server healthy
+---
+Task ID: 9
+Agent: Main Agent
+Task: Fix template system for 60+ templates + fix 6 reported UX defects
+
+Work Log:
+- Fixed templates.ts header comment: "55+ templates" → "60 templates" (actual count)
+- Fixed templates-view.tsx: renamed `mockTemplates` → `localTemplates` (5 references)
+- Added template count display: "Showing X of Y templates" with filter context
+- Added "All" reset chips for Mood and Section Type filter rows
+- Improved popular sort: secondary alphabetical tiebreaker for equal popularity
+- Replaced single featured template banner with 5-template responsive grid (1-5 columns)
+- Improved Load More button: shows remaining count, clearer label
+- Fixed preview-view.tsx: removed dead `Pencil` import
+- Fixed section toggle/reorder for AI-generated HTML: added heuristic section detection that scans `<section>` elements for heading-based keywords and injects `data-section` attributes dynamically
+- Fixed browser chrome URL: now shows `deploymentUrl` when available, falls back to generated `.storecraft.app` URL
+- Fixed projects-view.tsx: Deploy button now copies embed code if already deployed, otherwise navigates to preview
+- Added Share and Download actions to projects-view card dropdown menu with full handlers
+- Verification: ESLint 0 errors ✅, dev server running clean ✅
+
+Stage Summary:
+- Template system now properly supports all 60 templates with count display, improved filtering, and all 5 featured templates shown
+- Section toggle/reorder now works for both mock HTML and AI-generated HTML via heuristic keyword detection
+- All 6 previously reported UX defects fixed: Deploy/Share/Download buttons, section toggle/reorder, browser chrome URL
+- Projects view enhanced with Share/Download actions and smarter Deploy behavior

@@ -10,7 +10,6 @@ import {
   Rocket,
   Share2,
   Download,
-  Pencil,
   Layers,
   Sparkles,
   ArrowRight,
@@ -858,11 +857,11 @@ export function PreviewView() {
     // Section order for reordering: map section types to their desired order
     const orderedTypes = sections.filter(s => s.visible).map(s => s.type);
 
-    // Nothing hidden — return raw HTML
+    // Nothing hidden and in default order — return raw HTML
     if (hiddenTypes.length === 0 && orderedTypes.every((t, i) => {
-    const defaults = MOCK_SECTIONS.map(s => s.type);
-    return t === defaults[i];
-  })) return rawHtml;
+      const defaults = MOCK_SECTIONS.map(s => s.type);
+      return t === defaults[i];
+    })) return rawHtml;
 
     // Parse HTML and manipulate DOM sections
     if (typeof document === 'undefined') return rawHtml;
@@ -872,7 +871,90 @@ export function PreviewView() {
       const body = doc.body;
       if (!body) return rawHtml;
 
-      // 1. Hide sections: add display:none to matching CSS-class sections
+      // --- Heuristic: inject data-section attributes into AI-generated HTML ---
+      // AI-generated HTML likely won't have data-section or class="hero" etc.
+      // We detect sections by scanning all block-level elements for section types.
+      const sectionKeywords: Record<string, string[]> = {
+        hero: ['welcome', 'hero', 'banner', 'home', 'get started', 'introducing'],
+        about: ['about', 'our story', 'who we are', 'our mission', 'our philosophy', 'background'],
+        products: ['product', 'menu', 'shop', 'collection', 'catalog', 'our offering', 'what we offer', 'item'],
+        services: ['service', 'what we do', 'offering', 'expertise', 'solution'],
+        testimonials: ['testimonial', 'review', 'what people', 'customer', 'feedback', 'rating'],
+        contact: ['contact', 'get in touch', 'reach us', 'visit us', 'find us', 'location', 'address'],
+        gallery: ['gallery', 'portfolio', 'photos', 'showcase', 'lookbook', 'our work'],
+        hours: ['hour', 'opening', 'schedule', 'when we', 'timing'],
+        map: ['map', 'direction', 'locate'],
+        faq: ['faq', 'frequently', 'question', 'common question'],
+        team: ['team', 'our staff', 'meet our', 'our people', 'crew'],
+        cta: ['call to action', 'cta', 'order now', 'book now', 'get started', 'sign up', 'join us', 'subscribe'],
+        features: ['feature', 'why choose', 'why us', 'benefit', 'advantage'],
+        pricing: ['pricing', 'price', 'plan', 'cost', 'rate'],
+        events: ['event', 'calendar', 'happening', 'upcoming'],
+        footer: ['footer', 'copyright', 'rights reserved'],
+      };
+
+      // Check if the HTML already has data-section attributes
+      const hasDataSection = doc.querySelectorAll('[data-section]').length > 0;
+      // Check if it uses CSS class-based sections (like MOCK_BAKERY_HTML)
+      const hasClassSections = Array.from(sectionKeywords.keys()).some(
+        type => doc.querySelectorAll(`section.${type}`).length > 0
+      );
+
+      // If no structured sections found, inject data-section via heuristics
+      if (!hasDataSection && !hasClassSections) {
+        const blockElements = body.querySelectorAll('section, [role="region"], div[class*="section"], div[class*="hero"], div[class*="about"], div[class*="product"], div[class*="service"], div[class*="contact"], div[class*="testimonial"], div[class*="gallery"], div[class*="footer"]');
+        const processedElements = new Set<Element>();
+
+        blockElements.forEach(el => {
+          // Skip already-processed elements
+          if (processedElements.has(el)) return;
+
+          const text = (el.textContent || '').toLowerCase();
+          const html = (el.innerHTML || '').toLowerCase();
+
+          // Check headings first (more reliable)
+          const headings = el.querySelectorAll('h1, h2, h3');
+          let bestMatch = '';
+          let bestScore = 0;
+
+          headings.forEach(h => {
+            const headingText = (h.textContent || '').toLowerCase().trim();
+            for (const [type, keywords] of Object.entries(sectionKeywords)) {
+              for (const kw of keywords) {
+                if (headingText.includes(kw) && keywords.length > bestScore) {
+                  // Prefer exact or heading-level matches with higher score
+                  bestMatch = type;
+                  bestScore = keywords.length;
+                }
+              }
+            }
+          });
+
+          // Fallback: check first heading + body text
+          if (!bestMatch) {
+            const firstH = headings[0];
+            const combo = firstH
+              ? ((firstH.textContent || '') + ' ' + text.substring(0, 200)).toLowerCase()
+              : text.substring(0, 300);
+            for (const [type, keywords] of Object.entries(sectionKeywords)) {
+              for (const kw of keywords) {
+                if (combo.includes(kw)) {
+                  bestMatch = type;
+                  break;
+                }
+              }
+              if (bestMatch) break;
+            }
+          }
+
+          if (bestMatch) {
+            el.setAttribute('data-section', bestMatch);
+            processedElements.add(el);
+          }
+        });
+      }
+
+      // 1. Hide sections: add display:none to matching elements
       if (hiddenTypes.length > 0) {
         const hideSelectors = hiddenTypes
           .map(type => `section.${type}, section.${type}-section, div.${type}-section, [data-section="${type}"]`)
@@ -1425,9 +1507,11 @@ export function PreviewView() {
                     <div className="flex-1 flex justify-center">
                       <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
                         <Globe className="h-3 w-3" />
-                        {currentStorefront.businessName
-                          ? `${currentStorefront.businessName.toLowerCase().replace(/\s+/g, '-')}.storecraft.app`
-                          : 'storecraft.app'}
+                        {currentStorefront.deploymentUrl
+                          ? currentStorefront.deploymentUrl.replace(/^https?:\/\//, '')
+                          : currentStorefront.businessName
+                            ? `${currentStorefront.businessName.toLowerCase().replace(/\s+/g, '-')}.storecraft.app`
+                            : 'storecraft.app'}
                       </div>
                     </div>
                   </div>

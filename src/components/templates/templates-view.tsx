@@ -100,7 +100,7 @@ function FeaturedSkeleton() {
 // Mock Templates Data (fallback)
 // =============================================================================
 
-const mockTemplates: Template[] = allTemplates;
+const localTemplates: Template[] = allTemplates;
 
 // =============================================================================
 // Categories
@@ -207,7 +207,7 @@ export function TemplatesView() {
         const raw = (data as any).data?.templates as unknown[];
         if (!Array.isArray(raw) || raw.length === 0) {
           // API returned empty – use local mock
-          setTemplates(mockTemplates);
+          setTemplates(localTemplates);
           return;
         }
 
@@ -232,13 +232,13 @@ export function TemplatesView() {
           setTemplates(raw as Template[]);
         } else {
           // API mock data has sections as strings – fall back to local mocks
-          setTemplates(mockTemplates);
+          setTemplates(localTemplates);
         }
       } catch (err) {
         if (cancelled) return;
         console.error('[TemplatesView] fetch failed:', err);
         setError(err instanceof Error ? err.message : 'Failed to load templates');
-        setTemplates(mockTemplates);
+        setTemplates(localTemplates);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -285,22 +285,26 @@ export function TemplatesView() {
             setTemplates(raw as Template[]);
             setError(null);
           } else {
-            setTemplates(mockTemplates);
+            setTemplates(localTemplates);
           }
         } else {
-          setTemplates(mockTemplates);
+          setTemplates(localTemplates);
         }
       })
       .catch((err) => {
         if (cancelled) return;
         setError(err instanceof Error ? err.message : 'Failed to load templates');
-        setTemplates(mockTemplates);
+        setTemplates(localTemplates);
       })
       .finally(() => { if (!cancelled) setLoading(false); });
   }, []);
 
-  // Featured template
-  const featuredTemplate = templates.find((t) => t.featured) || templates[0];
+  // Featured templates (all featured, or first template as fallback)
+  const featuredTemplates = useMemo(() => {
+    const featured = templates.filter((t) => t.featured);
+    return featured.length > 0 ? featured : templates.length > 0 ? [templates[0]] : [];
+  }, [templates]);
+  const featuredTemplate = featuredTemplates[0];
 
   // Fix 4: Extract unique moods and section types
   const uniqueMoods = useMemo(
@@ -354,7 +358,11 @@ export function TemplatesView() {
     // Fix 3: Updated sort options
     switch (sortOption) {
       case 'popular':
-        result.sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0));
+        result.sort((a, b) => {
+          const popDiff = (b.popular ? 1 : 0) - (a.popular ? 1 : 0);
+          if (popDiff !== 0) return popDiff;
+          return a.name.localeCompare(b.name);
+        });
         break;
       case 'newest':
         result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -424,6 +432,15 @@ ${t.sections.map((s) => {
 
   return (
     <div className="space-y-6">
+      {/* Template Count */}
+      {!loading && templates.length > 0 && (
+        <div className="text-sm text-muted-foreground">
+          Showing <span className="font-medium text-foreground">{Math.min(visibleCount, filteredTemplates.length)}</span> of{' '}
+          <span className="font-medium text-foreground">{filteredTemplates.length}</span> templates
+          {hasActiveFilters && <span className="ml-1">(filtered from {templates.length} total)</span>}
+        </div>
+      )}
+
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
@@ -505,6 +522,17 @@ ${t.sections.map((s) => {
               Mood
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveMood('all')}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200',
+                  activeMood === 'all'
+                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/25'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                )}
+              >
+                All
+              </button>
               {uniqueMoods.map((mood) => (
                 <button
                   key={mood}
@@ -531,6 +559,17 @@ ${t.sections.map((s) => {
               Section Type
             </div>
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setActiveSectionType('all')}
+                className={cn(
+                  'px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200',
+                  activeSectionType === 'all'
+                    ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/25'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                )}
+              >
+                All
+              </button>
               {uniqueSectionTypes.map((type) => (
                 <button
                   key={type}
@@ -565,74 +604,55 @@ ${t.sections.map((s) => {
         )}
       </motion.div>
 
-      {/* Featured Template / Skeleton */}
+      {/* Featured Templates / Skeleton */}
       {loading ? (
         <FeaturedSkeleton />
-      ) : featuredTemplate ? (
+      ) : featuredTemplates.length > 0 ? (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.15 }}
       >
-        <div className="relative overflow-hidden rounded-xl border border-border/50">
-          <div className="relative p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start sm:items-center">
-            {/* Preview Image */}
-            <div className="shrink-0">
-              <div className="w-32 h-24 sm:w-48 sm:h-36 rounded-xl overflow-hidden shadow-lg">
+        <div className="flex items-center gap-2 mb-3">
+          <Star className="size-4 text-violet-400" />
+          <h3 className="text-sm font-semibold">Featured Templates</h3>
+          <Badge className="bg-violet-600/20 text-violet-400 border-violet-500/30 text-[10px]">
+            {featuredTemplates.length} picks
+          </Badge>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+          {featuredTemplates.map((ft) => (
+            <div
+              key={ft.id}
+              className="relative overflow-hidden rounded-xl border border-border/50 hover:border-violet-500/30 transition-all duration-300 cursor-pointer group"
+              onClick={() => setSelectedTemplate(ft)}
+            >
+              <div className="h-28 sm:h-32 overflow-hidden">
                 <Image
-                  src={featuredTemplate.preview}
-                  alt={`${featuredTemplate.name} template preview`}
-                  width={192}
-                  height={144}
-                  className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
+                  src={ft.preview}
+                  alt={`${ft.name} template preview`}
+                  width={300}
+                  height={160}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-              </div>
-            </div>
-
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-2">
-                <Badge className="bg-violet-600/20 text-violet-400 border-violet-500/30">
-                  <Star className="size-3" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                <Badge className="absolute top-2 left-2 bg-violet-600/90 text-white border-0 text-[10px]">
+                  <Star className="size-2.5 mr-0.5" />
                   Featured
                 </Badge>
-                <Badge variant="secondary" className="capitalize">
-                  {featuredTemplate.category}
-                </Badge>
               </div>
-              <h2 className="text-xl sm:text-2xl font-bold">{featuredTemplate.name}</h2>
-              <p className="text-muted-foreground mt-1 line-clamp-2">
-                {featuredTemplate.description}
-              </p>
-              {/* Fix 2: Show section count instead of download count */}
-              <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Layers className="size-3.5" />
-                  {featuredTemplate.sections.length} sections
-                </span>
+              <div className="p-3">
+                <h4 className="font-semibold text-sm truncate">{ft.name}</h4>
+                <p className="text-muted-foreground text-[11px] mt-0.5 line-clamp-1">{ft.description}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <Badge variant="secondary" className="text-[10px] capitalize">
+                    {ft.category}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground">{ft.sections.length} sections</span>
+                </div>
               </div>
             </div>
-
-            {/* Actions */}
-            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedTemplate(featuredTemplate)}
-              >
-                <Eye className="size-4 mr-1.5" />
-                Preview
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleUseTemplate(featuredTemplate)}
-                className="bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-700 hover:to-cyan-600 text-white"
-              >
-                Use Template
-                <ArrowRight className="size-4 ml-1.5" />
-              </Button>
-            </div>
-          </div>
+          ))}
         </div>
       </motion.div>
       ) : null}
@@ -735,13 +755,16 @@ ${t.sections.map((s) => {
 
       {/* Load More Button */}
       {!loading && filteredTemplates.length > visibleCount && (
-        <div className="flex justify-center pt-4">
+        <div className="flex flex-col items-center gap-2 pt-4">
+          <span className="text-xs text-muted-foreground">
+            {filteredTemplates.length - visibleCount} more templates available
+          </span>
           <Button
             variant="outline"
             onClick={() => setVisibleCount((prev) => prev + 12)}
             className="min-w-[200px]"
           >
-            Load More
+            Load More Templates
           </Button>
         </div>
       )}

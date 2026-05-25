@@ -31,6 +31,7 @@ import {
   Search,
   Copy,
   Download,
+  Share2,
   Phone,
   Mail,
 } from 'lucide-react';
@@ -406,6 +407,8 @@ function StorefrontCard({
   onPreview,
   onEdit,
   onDeploy,
+  onShare,
+  onDownload,
   onDelete,
   onClick,
 }: {
@@ -413,6 +416,8 @@ function StorefrontCard({
   onPreview: () => void;
   onEdit: () => void;
   onDeploy: () => void;
+  onShare: () => void;
+  onDownload: () => void;
   onDelete: () => void;
   onClick: () => void;
 }) {
@@ -497,6 +502,14 @@ function StorefrontCard({
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDeploy(); }}>
                   <Rocket className="h-4 w-4 mr-2" />
                   Deploy
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onShare(); }}>
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDownload(); }}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -884,8 +897,53 @@ export function ProjectsView() {
   };
 
   const handleDeploy = (storefront: Storefront) => {
+    // If already deployed, copy embed code
+    if (storefront.deploymentStatus === 'deployed' && storefront.deploymentUrl) {
+      const embedCode = `<!-- ${storefront.businessName} -->\n<iframe src="${storefront.deploymentUrl}" width="100%" height="600" frameborder="0" title="${storefront.businessName}"></iframe>`;
+      navigator.clipboard.writeText(embedCode).then(() => {
+        toast({ title: 'Embed Code Copied!', description: 'Paste this iframe code into any website.' });
+      }).catch(() => {
+        toast({ title: 'Copy Failed', description: 'Could not copy embed code.', variant: 'destructive' });
+      });
+      return;
+    }
+    // Otherwise navigate to preview where the Deploy button lives
     setCurrentStorefront(storefront);
     setCurrentView('preview');
+  };
+
+  const handleShare = (storefront: Storefront) => {
+    const businessName = storefront.businessName || 'My StoreCraft Website';
+    const shareText = `Check out ${businessName}, built with StoreCraft AI!`;
+    const url = storefront.deploymentUrl || (typeof window !== 'undefined' ? window.location.href : '');
+    const snippet = `${businessName}\n${shareText}\n${url}`;
+    navigator.clipboard.writeText(snippet).then(() => {
+      toast({ title: 'Copied to clipboard!', description: 'Share link copied.' });
+    }).catch(() => {
+      toast({ title: 'Share Failed', description: 'Could not copy to clipboard.', variant: 'destructive' });
+    });
+  };
+
+  const handleDownload = (storefront: Storefront) => {
+    if (!storefront.html) {
+      toast({ title: 'Nothing to download', description: 'This storefront has no generated HTML yet.', variant: 'destructive' });
+      return;
+    }
+    let downloadHtml = storefront.html;
+    if (!downloadHtml.trim().toLowerCase().startsWith('<!doctype')) {
+      downloadHtml = `<!DOCTYPE html>\n${downloadHtml}`;
+    }
+    const businessName = storefront.businessName || 'storecraft-website';
+    const blob = new Blob([downloadHtml], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `${businessName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(blobUrl);
+    toast({ title: 'Download Started', description: `${businessName}.html is being downloaded.` });
   };
 
   const handleDelete = async (storefront: Storefront) => {
@@ -1038,6 +1096,8 @@ export function ProjectsView() {
                 onPreview={() => handlePreview(storefront)}
                 onEdit={() => handleEdit(storefront)}
                 onDeploy={() => handleDeploy(storefront)}
+                onShare={() => handleShare(storefront)}
+                onDownload={() => handleDownload(storefront)}
                 onDelete={() => handleDelete(storefront)}
                 onClick={() => handleCardClick(storefront)}
               />

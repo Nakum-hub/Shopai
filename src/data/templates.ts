@@ -1,5 +1,5 @@
 // =============================================================================
-// StoreCraft AI — Comprehensive Template Library (55+ templates)
+// StoreCraft AI — Comprehensive Template Library (60 templates)
 // =============================================================================
 
 import type { Template, BusinessCategory } from '@/lib/types';
@@ -21,7 +21,7 @@ function makeSections(items: { type: Template['sections'][0]['type']; title: str
 }
 
 // =============================================================================
-// 55+ Templates across 11 business categories
+// 60 Templates across 11 business categories
 // =============================================================================
 
 export const allTemplates: Template[] = [
