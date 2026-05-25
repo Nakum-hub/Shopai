@@ -734,7 +734,9 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   }, [transitionState, flushMetrics, startTimers, flushQueue, sendWithOptionalAck]);
 
   // Keep the ref in sync so scheduleReconnect can reach the latest version
-  createAndConnectRef.current = createAndConnect;
+  useEffect(() => {
+    createAndConnectRef.current = createAndConnect;
+  });
 
   // ---------------------------------------------------------------------------
   // Public: connect()
@@ -881,9 +883,10 @@ export function useHardenedWs(options: UseHardenedWsOptions): UseHardenedWsRetur
   // ---------------------------------------------------------------------------
   // Return value
   // ---------------------------------------------------------------------------
+  /* eslint-disable react-hooks/refs */
   return {
-    // eslint-disable-next-line react-hooks/refs -- socket ref is safe to expose; reading .current during render is intentional
     socket: socketRef.current as Socket | null,
+    /* eslint-enable react-hooks/refs */
     state,
     isConnected: state === 'connected',
     metrics,

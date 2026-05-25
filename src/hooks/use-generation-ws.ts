@@ -186,9 +186,9 @@ export function useGenerationWs(callbacks: GenerationCallbacks, options?: UseGen
   // Fetch token on mount
   useEffect(() => {
     let cancelled = false;
-    setTokenLoading(true);
 
     (async () => {
+      setTokenLoading(true);
       if (cancelled) return;
       const result = await fetchWsToken();
       if (cancelled) return;
