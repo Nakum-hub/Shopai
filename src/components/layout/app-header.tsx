@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { Bell, Moon, Sun, Globe } from 'lucide-react';
+import { Bell, Moon, Sun, LogOut, User, Settings, Sparkles } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useSession, signOut } from 'next-auth/react';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,9 +39,19 @@ const viewDescriptions: Record<string, string> = {
 export function AppHeader() {
   const { currentView } = useAppStore();
   const { theme, setTheme } = useTheme();
+  const { data: session } = useSession();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => setMounted(true), []);
+
+  // Get user initials for avatar fallback
+  const userInitials = session?.user?.name
+    ? session.user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    : 'SC';
+
+  const handleSignOut = async () => {
+    await signOut({ callbackUrl: '/' });
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-border bg-background/80 backdrop-blur-md px-6">
@@ -81,7 +92,7 @@ export function AppHeader() {
             <DropdownMenuSeparator />
             <DropdownMenuItem className="flex flex-col items-start gap-1">
               <span className="text-sm font-medium">Storefront published successfully</span>
-              <span className="text-xs text-muted-foreground">Sweet Dreams Bakery is now live</span>
+              <span className="text-xs text-muted-foreground">Your storefront is now live</span>
             </DropdownMenuItem>
             <DropdownMenuItem className="flex flex-col items-start gap-1">
               <span className="text-sm font-medium">SEO score improved to 92</span>
@@ -94,13 +105,16 @@ export function AppHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* User Avatar */}
+        {/* User Avatar — shows real auth data */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="h-8 w-8 p-0 rounded-full">
               <Avatar className="h-7 w-7">
+                {session?.user?.image && (
+                  <AvatarImage src={session.user.image} alt={session.user.name || ''} />
+                )}
                 <AvatarFallback className="text-xs bg-gradient-to-br from-violet-600 to-cyan-500 text-white">
-                  SC
+                  {userInitials}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -108,15 +122,22 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col">
-                <span>StoreCraft User</span>
-                <span className="text-xs font-normal text-muted-foreground">Free Plan</span>
+                <span className="font-medium">{session?.user?.name || 'StoreCraft User'}</span>
+                <span className="text-xs font-normal text-muted-foreground truncate">
+                  {session?.user?.email || 'Free Plan'}
+                </span>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Documentation</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => useAppStore.getState().setCurrentView('settings')}>
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Sign out</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign out
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

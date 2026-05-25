@@ -7,7 +7,8 @@ import { consolidateProfile, assembleBusinessProfile, recallByCategory } from '@
 import { validateForLLM } from '@/lib/security';
 import { withRequestContext, logger } from '@/lib/request-context';
 import { success, error, createResponseTimings } from '@/lib/api-response';
-import { errorHandler, ValidationError, RateLimitError, NotFoundError } from '@/lib/errors';
+import { errorHandler, ValidationError, RateLimitError, NotFoundError, AuthenticationError } from '@/lib/errors';
+import { getAuthSession } from '@/lib/auth-utils';
 
 const SYSTEM_PROMPT = `You are StoreCraft AI, an intelligent assistant that helps small business owners create professional websites by understanding their business through conversation.
 
@@ -35,6 +36,10 @@ export async function POST(request: NextRequest) {
 
     try {
       logger.info('[CHAT_POST] Processing chat message');
+
+      // Authentication check (optional for chat — allows anonymous chat with session)
+      const session = await getAuthSession();
+      const userId = session?.user?.id || null;
 
       // Rate limiting
       const ctx = (await import('@/lib/request-context')).getCurrentContext();
@@ -82,21 +87,24 @@ export async function POST(request: NextRequest) {
       }
 
       // --- Persistent Chat Memory ---
-      let session = await db.conversationSession.findUnique({
+      let sessionRecord = await db.conversationSession.findUnique({
         where: { sessionId: sid },
         include: { messages: { orderBy: { createdAt: 'asc' }, take: 50 } },
       });
 
       let history: Array<{ role: string; content: string }>;
 
-      if (session && session.messages.length > 0) {
+      if (sessionRecord && sessionRecord.messages.length > 0) {
         history = [
           { role: 'assistant', content: SYSTEM_PROMPT },
-          ...session.messages.map(m => ({ role: m.role, content: m.content })),
+          ...sessionRecord.messages.map(m => ({ role: m.role, content: m.content })),
         ];
       } else {
         await db.conversationSession.create({
-          data: { sessionId: sid },
+          data: {
+            sessionId: sid,
+            userId, // ← Wire userId to DB write
+          },
         });
         history = [{ role: 'assistant', content: SYSTEM_PROMPT }];
       }
@@ -116,6 +124,8 @@ export async function POST(request: NextRequest) {
         data: {
           messageCount: { increment: 1 },
           lastMessageAt: new Date(),
+          // Wire userId if it wasn't set before (migration)
+          ...(userId ? { userId } : {}),
         },
       });
 
@@ -199,6 +209,7 @@ export async function POST(request: NextRequest) {
       logger.info('[CHAT_POST] Chat response sent', {
         sessionId: sid,
         messageCount: totalMessages,
+        authenticated: !!userId,
         durationMs: timings.elapsedMs(),
       });
 
@@ -220,6 +231,10 @@ export async function GET(request: NextRequest) {
     const timings = createResponseTimings();
 
     try {
+      // Optional auth for reading chat history
+      const session = await getAuthSession();
+      const userId = session?.user?.id || null;
+
       const { searchParams } = new URL(request.url);
       const sessionId = searchParams.get('sessionId');
 
@@ -227,14 +242,14 @@ export async function GET(request: NextRequest) {
         return error(new ValidationError('sessionId is required'), timings.meta());
       }
 
-      const session = await db.conversationSession.findUnique({
+      const chatSession = await db.conversationSession.findUnique({
         where: { sessionId },
         include: {
           messages: { orderBy: { createdAt: 'asc' }, take: 100 },
         },
       });
 
-      if (!session) {
+      if (!chatSession) {
         return success({
           sessionId,
           messageCount: 0,
@@ -243,11 +258,16 @@ export async function GET(request: NextRequest) {
         }, timings.meta());
       }
 
+      // Ownership check: if session has a userId, only that user can read it
+      if (chatSession.userId && userId && chatSession.userId !== userId) {
+        return error(new AuthenticationError('You do not have permission to view this conversation'), timings.meta());
+      }
+
       return success({
         sessionId,
-        messageCount: session.messageCount,
-        businessProfile: session.businessProfile ? JSON.parse(session.businessProfile) : null,
-        messages: session.messages.map(m => ({
+        messageCount: chatSession.messageCount,
+        businessProfile: chatSession.businessProfile ? JSON.parse(chatSession.businessProfile) : null,
+        messages: chatSession.messages.map(m => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -265,13 +285,35 @@ export async function DELETE(request: NextRequest) {
     const timings = createResponseTimings();
 
     try {
+      // Auth required for deletion
+      const session = await getAuthSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        return error(new AuthenticationError('Sign in to delete chat history'), timings.meta());
+      }
+
       const { searchParams } = new URL(request.url);
       const sessionId = searchParams.get('sessionId');
 
-      if (sessionId) {
-        await db.chatHistory.deleteMany({ where: { sessionId } });
-        await db.conversationSession.deleteMany({ where: { sessionId } });
+      if (!sessionId) {
+        return error(new ValidationError('sessionId is required'), timings.meta());
       }
+
+      // Ownership check
+      const chatSession = await db.conversationSession.findUnique({
+        where: { sessionId },
+        select: { userId: true },
+      });
+
+      if (chatSession?.userId && chatSession.userId !== userId) {
+        return error(new AuthenticationError('You do not have permission to delete this conversation'), timings.meta());
+      }
+
+      await db.chatHistory.deleteMany({ where: { sessionId } });
+      await db.conversationSession.deleteMany({ where: { sessionId } });
+
+      logger.info('[CHAT_DELETE] Chat history deleted', { sessionId, userId });
 
       return success({ deleted: true, sessionId: sessionId || null }, timings.meta());
     } catch (err) {

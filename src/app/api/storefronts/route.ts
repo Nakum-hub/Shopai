@@ -4,13 +4,19 @@ import { validateInput, createStorefrontSchema, updateStorefrontSchema } from '@
 import { rateLimit } from '@/lib/rate-limit';
 import { withRequestContext, logger, getCurrentContext } from '@/lib/request-context';
 import { success, error, created, noContent, paginated, createResponseTimings } from '@/lib/api-response';
-import { errorHandler, ValidationError, NotFoundError, RateLimitError } from '@/lib/errors';
+import { errorHandler, ValidationError, NotFoundError, RateLimitError, AuthenticationError } from '@/lib/errors';
+import { getAuthSession } from '@/lib/auth-utils';
+import { injectOwnershipFilter } from '@/lib/tenant-isolation';
 
 export async function GET(request: NextRequest) {
   return withRequestContext(request, async () => {
     const timings = createResponseTimings();
 
     try {
+      // Get authenticated user (optional — public storefronts visible)
+      const session = await getAuthSession();
+      const userId = session?.user?.id;
+
       const { searchParams } = new URL(request.url);
       const status = searchParams.get('status');
       const category = searchParams.get('category');
@@ -22,17 +28,28 @@ export async function GET(request: NextRequest) {
       if (status) where.status = status;
       if (category) where.category = category;
 
+      // If authenticated, filter to user's own storefronts
+      const query = { where };
+      if (userId) {
+        injectOwnershipFilter(query, userId);
+      }
+
       const [storefronts, total] = await Promise.all([
         db.storefront.findMany({
-          where,
+          where: query.where as Record<string, unknown>,
           orderBy: { updatedAt: 'desc' },
           take: pageSize,
           skip: offset,
         }),
-        db.storefront.count({ where }),
+        db.storefront.count({ where: query.where as Record<string, unknown> }),
       ]);
 
-      logger.info('[STOREFRONTS_GET] Fetched storefronts', { total, page, pageSize });
+      logger.info('[STOREFRONTS_GET] Fetched storefronts', {
+        total,
+        page,
+        pageSize,
+        authenticated: !!userId,
+      });
 
       return paginated(storefronts, total, page, pageSize, timings.meta());
     } catch (err) {
@@ -46,6 +63,14 @@ export async function POST(request: NextRequest) {
     const timings = createResponseTimings();
 
     try {
+      // Authentication REQUIRED for creating storefronts
+      const session = await getAuthSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        return error(new AuthenticationError('Sign in to create a storefront'), timings.meta());
+      }
+
       const ctx = getCurrentContext();
       const clientIp = ctx?.clientIp || 'unknown';
       const rl = rateLimit(`storefront:${clientIp}`, 60, 60_000);
@@ -70,10 +95,11 @@ export async function POST(request: NextRequest) {
           html: html || '',
           businessProfile: businessProfile ? JSON.stringify(businessProfile) : null,
           status: html ? 'ready' : 'draft',
+          userId, // ← Wire userId to DB write
         },
       });
 
-      logger.info('[STOREFRONTS_POST] Storefront created', { id: storefront.id, name });
+      logger.info('[STOREFRONTS_POST] Storefront created', { id: storefront.id, name, userId });
 
       return created(storefront, timings.meta());
     } catch (err) {
@@ -87,6 +113,14 @@ export async function PATCH(request: NextRequest) {
     const timings = createResponseTimings();
 
     try {
+      // Authentication REQUIRED for updating storefronts
+      const session = await getAuthSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        return error(new AuthenticationError('Sign in to update a storefront'), timings.meta());
+      }
+
       const body = await request.json();
       const validation = validateInput(updateStorefrontSchema, body);
       if (!validation.success) {
@@ -112,16 +146,32 @@ export async function PATCH(request: NextRequest) {
       }
 
       try {
-        const storefront = await db.storefront.update({
+        // Ownership check: verify the storefront belongs to this user
+        const existing = await db.storefront.findUnique({
           where: { id },
-          data,
+          select: { userId: true },
         });
 
-        logger.info('[STOREFRONTS_PATCH] Storefront updated', { id });
+        if (existing && existing.userId && existing.userId !== userId) {
+          return error(new AuthenticationError('You do not have permission to update this storefront'), timings.meta());
+        }
+
+        const storefront = await db.storefront.update({
+          where: { id },
+          data: {
+            ...data,
+            userId: existing?.userId || userId, // ← Ensure userId is set
+          },
+        });
+
+        logger.info('[STOREFRONTS_PATCH] Storefront updated', { id, userId });
 
         return success(storefront, timings.meta());
-      } catch {
-        return error(new NotFoundError('Storefront not found', id), timings.meta());
+      } catch (err) {
+        if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'P2025') {
+          return error(new NotFoundError('Storefront not found', id), timings.meta());
+        }
+        throw err;
       }
     } catch (err) {
       return errorHandler(err, request);
@@ -134,6 +184,14 @@ export async function DELETE(request: NextRequest) {
     const timings = createResponseTimings();
 
     try {
+      // Authentication REQUIRED for deleting storefronts
+      const session = await getAuthSession();
+      const userId = session?.user?.id;
+
+      if (!userId) {
+        return error(new AuthenticationError('Sign in to delete a storefront'), timings.meta());
+      }
+
       const { searchParams } = new URL(request.url);
       const id = searchParams.get('id');
 
@@ -141,12 +199,25 @@ export async function DELETE(request: NextRequest) {
         return error(new ValidationError('Storefront ID is required'), timings.meta());
       }
 
+      // Ownership check before delete
+      const existing = await db.storefront.findUnique({
+        where: { id },
+        select: { userId: true },
+      });
+
+      if (existing && existing.userId && existing.userId !== userId) {
+        return error(new AuthenticationError('You do not have permission to delete this storefront'), timings.meta());
+      }
+
       try {
         await db.storefront.delete({ where: { id } });
-        logger.info('[STOREFRONTS_DELETE] Storefront deleted', { id });
+        logger.info('[STOREFRONTS_DELETE] Storefront deleted', { id, userId });
         return success({ deleted: true, id }, timings.meta());
-      } catch {
-        return error(new NotFoundError('Storefront not found', id), timings.meta());
+      } catch (err) {
+        if (err instanceof Error && 'code' in err && (err as { code: string }).code === 'P2025') {
+          return error(new NotFoundError('Storefront not found', id), timings.meta());
+        }
+        throw err;
       }
     } catch (err) {
       return errorHandler(err, request);

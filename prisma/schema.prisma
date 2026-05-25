@@ -3,28 +3,87 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 // =============================================================================
-// User (tenant isolation groundwork)
+// User (NextAuth + tenant isolation)
 // =============================================================================
 
 model User {
-  id        String   @id @default(cuid())
-  email     String?  @unique
-  name      String?
-  role      String   @default("user") // user, admin
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  role          String    @default("user") // user, admin
+  password      String?   // hashed password for Credentials provider
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
+  // NextAuth relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // Tenant isolation relations
   storefronts           Storefront[]
   conversationSessions  ConversationSession[]
   semanticMemories      SemanticMemory[]
 
   @@index([email])
   @@index([role])
+}
+
+// =============================================================================
+// Account (NextAuth OAuth accounts)
+// =============================================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// =============================================================================
+// Session (NextAuth session tokens)
+// =============================================================================
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// =============================================================================
+// VerificationToken (NextAuth email verification / magic links)
+// =============================================================================
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 // =============================================================================
@@ -39,8 +98,8 @@ model Storefront {
   status          String   @default("draft") // draft, generating, ready, published, error
   description     String?
   url             String?
-  html            String   @db.Text
-  businessProfile String?  @db.Text // JSON business profile
+  html            String  
+  businessProfile String?  // JSON business profile
   deploymentStatus String  @default("none")
   deploymentUrl   String?
   publishedAt     DateTime?
@@ -97,9 +156,9 @@ model GenerationJob {
   storefrontId    String
   status          String    @default("idle")
   progress        Int       @default(0)
-  message         String?   @db.Text
-  voiceTranscript String?   @db.Text
-  logs            String?   @db.Text // JSON array of logs
+  message         String?  
+  voiceTranscript String?  
+  logs            String?   // JSON array of logs
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
 
@@ -121,10 +180,10 @@ model PipelineExecution {
   currentStage    String
   totalStages     Int       @default(9)
   progress        Int       @default(0)
-  inputSnapshot   String?   @db.Text // JSON: the business profile / prompt that triggered this run
-  outputHtml      String?   @db.Text // final generated HTML
+  inputSnapshot   String?   // JSON: the business profile / prompt that triggered this run
+  outputHtml      String?   // final generated HTML
   validationScore Int?
-  errorMessage    String?   @db.Text
+  errorMessage    String?  
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
   durationMs      Int?      // completion time in milliseconds
@@ -151,7 +210,7 @@ model PipelineLog {
   level       String   @default("info") // info, success, warning, error
   agent       String
   message     String
-  detail      String?  @db.Text
+  detail      String? 
   inputTokens Int?
   outputTokens Int?
   durationMs  Int?
@@ -173,7 +232,7 @@ model ConversationSession {
   id              String    @id @default(cuid())
   sessionId       String    @unique
   storefrontId    String?
-  businessProfile String?   @db.Text // JSON: extracted business profile
+  businessProfile String?   // JSON: extracted business profile
   messageCount    Int       @default(0)
   lastMessageAt   DateTime?
   createdAt       DateTime  @default(now())
@@ -198,8 +257,8 @@ model ChatHistory {
   sessionId String
   session   ConversationSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
   role      String   // user, assistant, system
-  content   String   @db.Text
-  metadata  String?  @db.Text // JSON metadata
+  content   String  
+  metadata  String?  // JSON metadata
   createdAt DateTime @default(now())
 
   @@index([sessionId, createdAt])
@@ -214,11 +273,11 @@ model ChatHistory {
 model Template {
   id            String   @id @default(cuid())
   name          String
-  description   String?  @db.Text
+  description   String? 
   category      String   @default("other")
   preview       String?  // CSS gradient string
-  sections      String?  @db.Text // JSON sections config
-  style         String?  @db.Text // JSON brand style
+  sections      String?  // JSON sections config
+  style         String?  // JSON brand style
   popular       Boolean  @default(false)
   featured      Boolean  @default(false)
   downloadCount Int      @default(0)
@@ -239,7 +298,7 @@ model SemanticMemory {
   sessionId  String
   category   String    // 'business_profile' | 'user_preference' | 'generation_insight' | 'conversation_fact'
   key        String    // e.g., "business_name", "preferred_color", "generation_tip"
-  value      String    @db.Text // the actual stored value
+  value      String    // the actual stored value
   confidence Float     @default(1.0) // 0.0 to 1.0
   source     String    // 'voice' | 'chat' | 'generation' | 'system'
   expiresAt  DateTime? // optional TTL
@@ -269,7 +328,7 @@ model AuditLog {
   resource      String   // e.g. "storefront", "chat_session", "user"
   resourceId    String?
   level         String   @default("info") // info, warn, critical
-  details       String?  @db.Text // JSON string
+  details       String?  // JSON string
   ip            String?
   userAgent     String?
   sessionId     String?

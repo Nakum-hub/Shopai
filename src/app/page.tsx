@@ -3,6 +3,7 @@
 import React from 'react';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
+import { AuthGate } from '@/components/auth-gate';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { AppHeader } from '@/components/layout/app-header';
 import { useAppStore } from '@/store/app-store';
@@ -66,7 +67,9 @@ export default function Home() {
       enableSystem
       disableTransitionOnChange
     >
-      <AppContent />
+      <AuthGate>
+        <AppContent />
+      </AuthGate>
       <Toaster />
     </ThemeProvider>
   );

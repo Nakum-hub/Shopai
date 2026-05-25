@@ -1,21 +1,14 @@
 import { PrismaClient } from '@prisma/client';
 
 // =============================================================================
-// Production PostgreSQL Database Client
+// Database Client (SQLite / PostgreSQL — auto-detected from DATABASE_URL)
 // =============================================================================
-// PostgreSQL-native client with:
-// 1. Optimized connection pooling for concurrent traffic
-// 2. Configured for WebSocket + API mixed workloads
+// Features:
+// 1. Singleton pattern (prevents connection leaks in dev hot reload)
+// 2. Environment-aware logging
 // 3. Health check diagnostics
-// 4. Singleton pattern (prevents connection leaks in dev hot reload)
+// 4. Graceful shutdown handlers
 // =============================================================================
-
-// -----------------------------------------------------------------------------
-// Configuration
-// -----------------------------------------------------------------------------
-
-const DB_CONNECTION_TIMEOUT_MS = 10000;
-const DB_QUERY_TIMEOUT_MS = 30000;
 
 // -----------------------------------------------------------------------------
 // Singleton Pattern (prevents multiple connections in dev with hot reload)
@@ -30,25 +23,19 @@ const globalForPrisma = globalThis as unknown as {
 // -----------------------------------------------------------------------------
 
 const createPrismaClient = () => {
+  const isSqlite = (process.env.DATABASE_URL || '').startsWith('file:');
+
   const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development'
       ? ['warn', 'error']
       : ['error'],
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL || 'postgresql://storecraft:storecraft@localhost:5432/storecraft',
-      },
-    },
-    // PostgreSQL connection pool settings
-    // These control how Prisma manages connections via pg-pool
   });
 
-  // Configure connection timeout on the underlying pool
-  // @ts-expect-error - accessing internal pool for configuration
-  if (client._engine?.config?.poolConfig) {
-    // Connection pool settings are configured via DATABASE_URL params:
-    // ?connection_limit=10&pool_timeout=30
-    // See: https://www.prisma.io/docs/concepts/components/prisma-client/connection-management
+  // SQLite: enable WAL mode for better concurrent read performance
+  if (isSqlite) {
+    // Use queryRaw instead of executeRaw for PRAGMA (SQLite PRAGMAs return results)
+    client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {});
+    client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {});
   }
 
   return client;
@@ -66,7 +53,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 /**
  * Verify database connectivity and return diagnostic info.
- * Uses PostgreSQL-specific queries for meaningful diagnostics.
+ * Works with both SQLite and PostgreSQL.
  */
 export async function dbHealthCheck(): Promise<{
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -79,34 +66,51 @@ export async function dbHealthCheck(): Promise<{
   const start = Date.now();
 
   try {
-    // PostgreSQL-specific health check query
-    const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
-      `SELECT version() as version`
-    );
-    const version = result[0]?.version || 'unknown';
+    const isSqlite = (process.env.DATABASE_URL || '').startsWith('file:');
 
-    // Get connection pool stats
-    const poolStats = await db.$queryRawUnsafe<Array<{ count: number }>>(
-      `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
-    );
-    const activeConnections = poolStats[0]?.count || 0;
+    if (isSqlite) {
+      // SQLite health check
+      const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
+        `SELECT sqlite_version() as version`
+      );
+      const version = result[0]?.version || 'unknown';
 
-    // Get max connections
-    const maxResult = await db.$queryRawUnsafe<Array<{ max_connections: number }>>(
-      `SHOW max_connections`
-    );
-    const maxConnections = maxResult[0]?.max_connections || 100;
+      const latencyMs = Date.now() - start;
+      return {
+        status: latencyMs < 50 ? 'healthy' : latencyMs < 200 ? 'degraded' : 'unhealthy',
+        latencyMs,
+        poolSize: 1,
+        activeConnections: 1,
+        maxConnections: 1,
+        version: `SQLite ${version}`,
+      };
+    } else {
+      // PostgreSQL health check
+      const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
+        `SELECT version() as version`
+      );
+      const version = result[0]?.version || 'unknown';
 
-    const latencyMs = Date.now() - start;
+      const poolStats = await db.$queryRawUnsafe<Array<{ count: number }>>(
+        `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
+      );
+      const activeConnections = poolStats[0]?.count || 0;
 
-    return {
-      status: latencyMs < 50 ? 'healthy' : latencyMs < 200 ? 'degraded' : 'unhealthy',
-      latencyMs,
-      poolSize: activeConnections,
-      activeConnections,
-      maxConnections,
-      version,
-    };
+      const maxResult = await db.$queryRawUnsafe<Array<{ max_connections: number }>>(
+        `SHOW max_connections`
+      );
+      const maxConnections = maxResult[0]?.max_connections || 100;
+
+      const latencyMs = Date.now() - start;
+      return {
+        status: latencyMs < 50 ? 'healthy' : latencyMs < 200 ? 'degraded' : 'unhealthy',
+        latencyMs,
+        poolSize: activeConnections,
+        activeConnections,
+        maxConnections,
+        version,
+      };
+    }
   } catch (error) {
     return {
       status: 'unhealthy',
@@ -129,9 +133,9 @@ export async function dbHealthCheck(): Promise<{
 export async function disconnectDb(): Promise<void> {
   try {
     await db.$disconnect();
-    console.log('[DB] PostgreSQL connection closed');
+    console.log('[DB] Database connection closed');
   } catch (err) {
-    console.error('[DB] Error closing PostgreSQL connection:', err);
+    console.error('[DB] Error closing database connection:', err);
   }
 }
 

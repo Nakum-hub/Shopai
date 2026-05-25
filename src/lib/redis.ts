@@ -18,19 +18,19 @@ import Redis, { type RedisOptions } from 'ioredis';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 const redisOptions: RedisOptions = {
-  maxRetriesPerRequest: 3,
+  maxRetriesPerRequest: 1,
   retryStrategy(times) {
-    const delay = Math.min(times * 100, 3000); // 100ms → 3000ms max
-    return delay;
+    if (times > 2) return null; // Stop retrying after 2 attempts
+    return Math.min(times * 200, 1000); // 200ms → 1000ms
   },
   reconnectOnError(err) {
-    // Reconnect on READONLY errors (happens in Redis Cluster failover)
     return err.message.includes('READONLY');
   },
-  enableReadyCheck: true,
-  lazyConnect: true, // Don't connect immediately — connect on first command
-  connectTimeout: 10000,
-  commandTimeout: 5000,
+  enableReadyCheck: false, // Skip ready check to avoid timeout
+  lazyConnect: true,
+  connectTimeout: 2000, // 2 second connect timeout
+  commandTimeout: 2000, // 2 second command timeout
+  offlineQueue: false, // Don't queue commands when offline
 };
 
 // -----------------------------------------------------------------------------
@@ -45,6 +45,8 @@ const createRedisClient = (): Redis => {
   const client = new Redis(REDIS_URL, redisOptions);
 
   client.on('error', (err) => {
+    // Suppress repeated connection errors in dev when Redis isn't available
+    if (process.env.NODE_ENV === 'development') return;
     console.error('[Redis] Connection error:', err.message);
   });
 
