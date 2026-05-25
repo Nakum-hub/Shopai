@@ -26,9 +26,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Search,
-  Download,
   Eye,
   Sparkles,
   Layout,
@@ -38,6 +38,10 @@ import {
   ArrowRight,
   Star,
   TrendingUp,
+  ScrollText,
+  Monitor,
+  Filter,
+  X,
 } from 'lucide-react';
 
 // =============================================================================
@@ -98,7 +102,6 @@ function FeaturedSkeleton() {
 
 const mockTemplates: Template[] = allTemplates;
 
-
 // =============================================================================
 // Categories
 // =============================================================================
@@ -118,7 +121,7 @@ const categories: { label: string; value: BusinessCategory | 'all' }[] = [
   { label: 'Other', value: 'other' },
 ];
 
-type SortOption = 'popular' | 'newest' | 'downloads';
+type SortOption = 'popular' | 'newest' | 'sections';
 
 // =============================================================================
 // Section type label map
@@ -138,6 +141,9 @@ const sectionLabels: Record<string, string> = {
   cta: 'Call to Action',
   footer: 'Footer',
   map: 'Map',
+  features: 'Features',
+  pricing: 'Pricing',
+  events: 'Events',
 };
 
 // =============================================================================
@@ -165,6 +171,8 @@ export function TemplatesView() {
   const { setCurrentView, setSelectedTemplate: setStoreTemplate } = useAppStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<BusinessCategory | 'all'>('all');
+  const [activeMood, setActiveMood] = useState<string>('all');
+  const [activeSectionType, setActiveSectionType] = useState<string>('all');
   const [sortOption, setSortOption] = useState<SortOption>('popular');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -175,7 +183,13 @@ export function TemplatesView() {
   // Reset visible count when filters change
   useEffect(() => {
     setVisibleCount(12);
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, activeMood, activeSectionType, searchQuery]);
+
+  // Reset mood and section type filters when category changes
+  useEffect(() => {
+    setActiveMood('all');
+    setActiveSectionType('all');
+  }, [activeCategory]);
 
   // Fetch templates from API on mount
   useEffect(() => {
@@ -189,7 +203,8 @@ export function TemplatesView() {
 
         if (cancelled) return;
 
-        const raw = data.templates as unknown[];
+        // Fix 1: API response is wrapped in { success, data: { templates } }
+        const raw = (data as any).data?.templates as unknown[];
         if (!Array.isArray(raw) || raw.length === 0) {
           // API returned empty – use local mock
           setTemplates(mockTemplates);
@@ -240,7 +255,6 @@ export function TemplatesView() {
     setLoading(true);
     setError(null);
     setTemplates([]);
-    // Trigger a refetch by leveraging a state toggle trick
     fetch('/api/templates')
       .then((res) => {
         if (cancelled) return;
@@ -249,7 +263,8 @@ export function TemplatesView() {
       })
       .then((data) => {
         if (cancelled) return;
-        const raw = data.templates as unknown[];
+        // Fix 1: API response is wrapped in { success, data: { templates } }
+        const raw = (data as any).data?.templates as unknown[];
         if (Array.isArray(raw) && raw.length > 0) {
           const valid = raw.every(
             (t: unknown) => {
@@ -287,12 +302,43 @@ export function TemplatesView() {
   // Featured template
   const featuredTemplate = templates.find((t) => t.featured) || templates[0];
 
+  // Fix 4: Extract unique moods and section types
+  const uniqueMoods = useMemo(
+    () => [...new Set(templates.map((t) => t.style.mood))].sort(),
+    [templates]
+  );
+
+  const uniqueSectionTypes = useMemo(
+    () => [...new Set(templates.flatMap((t) => t.sections.map((s) => s.type)))].sort(),
+    [templates]
+  );
+
+  // Fix 4: Check if any non-default filter is active
+  const hasActiveFilters = activeCategory !== 'all' || activeMood !== 'all' || activeSectionType !== 'all' || searchQuery.trim() !== '';
+
+  const resetAllFilters = useCallback(() => {
+    setActiveCategory('all');
+    setActiveMood('all');
+    setActiveSectionType('all');
+    setSearchQuery('');
+  }, []);
+
   // Filter & sort
   const filteredTemplates = useMemo(() => {
     let result = templates.filter((t) => t.id !== featuredTemplate?.id);
 
     if (activeCategory !== 'all') {
       result = result.filter((t) => t.category === activeCategory);
+    }
+
+    // Fix 4: Mood filter
+    if (activeMood !== 'all') {
+      result = result.filter((t) => t.style.mood === activeMood);
+    }
+
+    // Fix 4: Section type filter
+    if (activeSectionType !== 'all') {
+      result = result.filter((t) => t.sections.some((s) => s.type === activeSectionType));
     }
 
     if (searchQuery.trim()) {
@@ -305,27 +351,76 @@ export function TemplatesView() {
       );
     }
 
+    // Fix 3: Updated sort options
     switch (sortOption) {
       case 'popular':
         result.sort((a, b) => (b.popular ? 1 : 0) - (a.popular ? 1 : 0));
         break;
       case 'newest':
-        result.sort((a, b) => b.downloadCount - a.downloadCount);
+        result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         break;
-      case 'downloads':
-        result.sort((a, b) => b.downloadCount - a.downloadCount);
+      case 'sections':
+        result.sort((a, b) => b.sections.length - a.sections.length);
         break;
     }
 
     return result;
-  }, [searchQuery, activeCategory, sortOption, templates, featuredTemplate?.id]);
+  }, [searchQuery, activeCategory, activeMood, activeSectionType, sortOption, templates, featuredTemplate?.id]);
 
-  const handleUseTemplate = (template: Template) => {
+  // Fix 5: Live HTML preview
+  const previewHtml = useMemo(() => {
+    if (!selectedTemplate) return '';
+    const t = selectedTemplate;
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.style.fontFamily)}:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: '${t.style.fontFamily}', sans-serif; color: #333; }
+.hero { background: linear-gradient(135deg, ${t.style.primaryColor}, ${t.style.secondaryColor}); padding: 60px 20px; text-align: center; color: white; }
+.hero h1 { font-size: 2rem; margin-bottom: 8px; }
+.hero p { opacity: 0.9; font-size: 1.1rem; }
+.section { padding: 40px 20px; max-width: 800px; margin: 0 auto; }
+.section h2 { font-size: 1.4rem; margin-bottom: 12px; color: ${t.style.primaryColor}; }
+.section p { color: #666; line-height: 1.6; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
+.grid-item { background: #f8f8f8; border-radius: 8px; padding: 16px; }
+.grid-item h3 { font-size: 0.9rem; margin-bottom: 4px; }
+.grid-item p { font-size: 0.8rem; }
+</style>
+</head>
+<body>
+${t.sections.map((s) => {
+  if (s.type === 'hero') return `<div class="hero"><h1>${s.title}</h1><p>${s.content}</p></div>`;
+  return `<div class="section"><h2>${s.title}</h2><p>${s.content}</p></div>`;
+}).join('\n')}
+</body>
+</html>`;
+  }, [selectedTemplate]);
+
+  // Fix 6: Similar templates recommendation
+  const similarTemplates = useMemo(() => {
+    if (!selectedTemplate || templates.length === 0) return [];
+    return templates
+      .filter(
+        (t) =>
+          t.id !== selectedTemplate.id &&
+          (t.category === selectedTemplate.category ||
+            t.style.mood === selectedTemplate.style.mood ||
+            t.sections.some((s) => selectedTemplate.sections.some((ss) => ss.type === s.type)))
+      )
+      .slice(0, 4);
+  }, [selectedTemplate, templates]);
+
+  const handleUseTemplate = useCallback((template: Template) => {
     setSelectedTemplate(null);
     // Store the selected template so the builder can use its data
     setStoreTemplate(template);
     setCurrentView('builder');
-  };
+  }, [setStoreTemplate, setCurrentView]);
 
   return (
     <div className="space-y-6">
@@ -379,7 +474,7 @@ export function TemplatesView() {
             <SelectContent>
               <SelectItem value="popular">Popular</SelectItem>
               <SelectItem value="newest">Newest</SelectItem>
-              <SelectItem value="downloads">Most Downloads</SelectItem>
+              <SelectItem value="sections">Most Sections</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -401,6 +496,73 @@ export function TemplatesView() {
             </button>
           ))}
         </div>
+
+        {/* Fix 4: Mood Filter Chips */}
+        {!loading && uniqueMoods.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Filter className="size-3" />
+              Mood
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {uniqueMoods.map((mood) => (
+                <button
+                  key={mood}
+                  onClick={() => setActiveMood(mood)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200',
+                    activeMood === mood
+                      ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/25'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                  )}
+                >
+                  {mood}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fix 4: Section Type Filter Chips */}
+        {!loading && uniqueSectionTypes.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Layers className="size-3" />
+              Section Type
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {uniqueSectionTypes.map((type) => (
+                <button
+                  key={type}
+                  onClick={() => setActiveSectionType(type)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 capitalize',
+                    activeSectionType === type
+                      ? 'bg-cyan-600 text-white shadow-md shadow-cyan-500/25'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
+                  )}
+                >
+                  {sectionLabels[type] || type}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Fix 4: Reset Filters Button */}
+        {hasActiveFilters && (
+          <div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={resetAllFilters}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-3.5 mr-1.5" />
+              Reset Filters
+            </Button>
+          </div>
+        )}
       </motion.div>
 
       {/* Featured Template / Skeleton */}
@@ -442,11 +604,8 @@ export function TemplatesView() {
               <p className="text-muted-foreground mt-1 line-clamp-2">
                 {featuredTemplate.description}
               </p>
+              {/* Fix 2: Show section count instead of download count */}
               <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Download className="size-3.5" />
-                  {featuredTemplate.downloadCount.toLocaleString()} downloads
-                </span>
                 <span className="flex items-center gap-1">
                   <Layers className="size-3.5" />
                   {featuredTemplate.sections.length} sections
@@ -535,9 +694,10 @@ export function TemplatesView() {
                   </p>
 
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/50">
+                    {/* Fix 2: Show section count badge instead of download count */}
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Download className="size-3" />
-                      {template.downloadCount.toLocaleString()}
+                      <Layers className="size-3" />
+                      {template.sections.length} sections
                     </span>
                     <div className="flex gap-1.5">
                       <Button
@@ -605,151 +765,209 @@ export function TemplatesView() {
       <Dialog open={!!selectedTemplate} onOpenChange={() => setSelectedTemplate(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedTemplate && (
-            <>
-              {/* Large Preview */}
-              <div className="h-56 sm:h-72 rounded-xl relative overflow-hidden -mx-6 -mt-6 mb-4">
-                <Image
-                  src={selectedTemplate.preview}
-                  alt={`${selectedTemplate.name} template preview`}
-                  width={800}
-                  height={400}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                <div className="absolute bottom-4 left-6 right-6">
-                  <div className="flex items-center gap-2 mb-1">
-                    {selectedTemplate.featured && (
-                      <Badge className="bg-violet-600/20 text-violet-300 border-violet-500/30">
-                        <Star className="size-3" />
-                        Featured
-                      </Badge>
-                    )}
-                    {selectedTemplate.popular && (
-                      <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
-                        <TrendingUp className="size-3" />
-                        Popular
-                      </Badge>
-                    )}
-                  </div>
-                  <DialogHeader>
-                    <DialogTitle className="text-2xl text-white">
-                      {selectedTemplate.name}
-                    </DialogTitle>
-                    <DialogDescription className="text-white/80 text-sm">
-                      {selectedTemplate.category.charAt(0).toUpperCase() + selectedTemplate.category.slice(1)} Template
-                    </DialogDescription>
-                  </DialogHeader>
-                </div>
-              </div>
+            <Tabs defaultValue="overview" className="w-full">
+              {/* Fix 5: Tab Switcher */}
+              <TabsList className="mb-4">
+                <TabsTrigger value="overview">
+                  <ScrollText className="size-4 mr-1.5" />
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger value="preview">
+                  <Monitor className="size-4 mr-1.5" />
+                  Live Preview
+                </TabsTrigger>
+              </TabsList>
 
-              {/* Full Description */}
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                {selectedTemplate.description}
-              </p>
-
-              {/* Stats */}
-              <div className="flex items-center gap-4 py-3">
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Download className="size-4" />
-                  {selectedTemplate.downloadCount.toLocaleString()} downloads
-                </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Layers className="size-4" />
-                  {selectedTemplate.sections.length} sections
-                </div>
-              </div>
-
-              {/* Sections List */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <Layers className="size-4 text-violet-400" />
-                  Included Sections
-                </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {selectedTemplate.sections.map((section, idx) => (
-                    <div
-                      key={section.id}
-                      className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm"
-                    >
-                      <span className="size-5 rounded-full bg-violet-600/20 text-violet-400 flex items-center justify-center text-[10px] font-bold">
-                        {idx + 1}
-                      </span>
-                      {sectionLabels[section.type] || section.title}
+              {/* Fix 5: Overview Tab */}
+              <TabsContent value="overview" className="space-y-4">
+                {/* Large Preview */}
+                <div className="h-56 sm:h-72 rounded-xl relative overflow-hidden -mx-6 -mt-2 mb-4">
+                  <Image
+                    src={selectedTemplate.preview}
+                    alt={`${selectedTemplate.name} template preview`}
+                    width={800}
+                    height={400}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                  <div className="absolute bottom-4 left-6 right-6">
+                    <div className="flex items-center gap-2 mb-1">
+                      {selectedTemplate.featured && (
+                        <Badge className="bg-violet-600/20 text-violet-300 border-violet-500/30">
+                          <Star className="size-3" />
+                          Featured
+                        </Badge>
+                      )}
+                      {selectedTemplate.popular && (
+                        <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30">
+                          <TrendingUp className="size-3" />
+                          Popular
+                        </Badge>
+                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Style Details */}
-              <div className="space-y-3">
-                <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <Palette className="size-4 text-cyan-400" />
-                  Style Details
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Primary Color */}
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
-                    <div
-                      className="size-8 rounded-lg border border-border/50 shadow-inner"
-                      style={{ backgroundColor: selectedTemplate.style.primaryColor }}
-                    />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Primary</p>
-                      <p className="text-xs font-mono">{selectedTemplate.style.primaryColor}</p>
-                    </div>
-                  </div>
-                  {/* Secondary Color */}
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
-                    <div
-                      className="size-8 rounded-lg border border-border/50 shadow-inner"
-                      style={{ backgroundColor: selectedTemplate.style.secondaryColor }}
-                    />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Secondary</p>
-                      <p className="text-xs font-mono">{selectedTemplate.style.secondaryColor}</p>
-                    </div>
-                  </div>
-                  {/* Font */}
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
-                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center">
-                      <Type className="size-4 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Font</p>
-                      <p className="text-xs font-medium">{selectedTemplate.style.fontFamily}</p>
-                    </div>
-                  </div>
-                  {/* Theme */}
-                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
-                    <div className="size-8 rounded-lg bg-muted flex items-center justify-center">
-                      <Layout className="size-4 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Theme</p>
-                      <p className="text-xs font-medium capitalize">{selectedTemplate.style.theme}</p>
-                    </div>
+                    <DialogHeader>
+                      <DialogTitle className="text-2xl text-white">
+                        {selectedTemplate.name}
+                      </DialogTitle>
+                      <DialogDescription className="text-white/80 text-sm">
+                        {selectedTemplate.category.charAt(0).toUpperCase() + selectedTemplate.category.slice(1)} Template
+                      </DialogDescription>
+                    </DialogHeader>
                   </div>
                 </div>
-              </div>
 
-              {/* CTA */}
-              <div className="flex flex-col sm:flex-row gap-2 pt-2">
-                <Button
-                  onClick={() => handleUseTemplate(selectedTemplate)}
-                  className="flex-1 bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-700 hover:to-cyan-600 text-white"
-                >
-                  <Sparkles className="size-4 mr-2" />
-                  Use This Template
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setSelectedTemplate(null)}
-                  className="flex-1"
-                >
-                  Close
-                </Button>
-              </div>
-            </>
+                {/* Full Description */}
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {selectedTemplate.description}
+                </p>
+
+                {/* Fix 2: Stats - show section count only */}
+                <div className="flex items-center gap-4 py-3">
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Layers className="size-4" />
+                    {selectedTemplate.sections.length} sections
+                  </div>
+                </div>
+
+                {/* Sections List */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <Layers className="size-4 text-violet-400" />
+                    Included Sections
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {selectedTemplate.sections.map((section, idx) => (
+                      <div
+                        key={section.id}
+                        className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 text-sm"
+                      >
+                        <span className="size-5 rounded-full bg-violet-600/20 text-violet-400 flex items-center justify-center text-[10px] font-bold">
+                          {idx + 1}
+                        </span>
+                        {sectionLabels[section.type] || section.title}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Style Details */}
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold flex items-center gap-2">
+                    <Palette className="size-4 text-cyan-400" />
+                    Style Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Primary Color */}
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
+                      <div
+                        className="size-8 rounded-lg border border-border/50 shadow-inner"
+                        style={{ backgroundColor: selectedTemplate.style.primaryColor }}
+                      />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Primary</p>
+                        <p className="text-xs font-mono">{selectedTemplate.style.primaryColor}</p>
+                      </div>
+                    </div>
+                    {/* Secondary Color */}
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
+                      <div
+                        className="size-8 rounded-lg border border-border/50 shadow-inner"
+                        style={{ backgroundColor: selectedTemplate.style.secondaryColor }}
+                      />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Secondary</p>
+                        <p className="text-xs font-mono">{selectedTemplate.style.secondaryColor}</p>
+                      </div>
+                    </div>
+                    {/* Font */}
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
+                      <div className="size-8 rounded-lg bg-muted flex items-center justify-center">
+                        <Type className="size-4 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Font</p>
+                        <p className="text-xs font-medium">{selectedTemplate.style.fontFamily}</p>
+                      </div>
+                    </div>
+                    {/* Theme */}
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-muted/50">
+                      <div className="size-8 rounded-lg bg-muted flex items-center justify-center">
+                        <Layout className="size-4 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Theme</p>
+                        <p className="text-xs font-medium capitalize">{selectedTemplate.style.theme}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fix 6: Similar Templates */}
+                {similarTemplates.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <Sparkles className="size-4 text-amber-400" />
+                      Similar Templates
+                    </h4>
+                    <div className="flex overflow-x-auto gap-3 pb-2">
+                      {similarTemplates.map((sim) => (
+                        <button
+                          key={sim.id}
+                          onClick={() => setSelectedTemplate(sim)}
+                          className="flex-shrink-0 flex flex-col gap-2 p-2 rounded-lg border border-border/50 bg-muted/30 hover:bg-muted/60 transition-colors w-36"
+                        >
+                          <div className="w-full h-9 rounded overflow-hidden">
+                            <Image
+                              src={sim.preview}
+                              alt={sim.name}
+                              width={144}
+                              height={36}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <p className="text-xs font-medium truncate">{sim.name}</p>
+                          <Badge variant="secondary" className="text-[10px] w-fit capitalize">
+                            {sim.category}
+                          </Badge>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Fix 5: Live Preview Tab */}
+              <TabsContent value="preview">
+                <div className="rounded-lg overflow-hidden border border-border/50">
+                  <iframe
+                    srcDoc={previewHtml}
+                    sandbox="allow-scripts"
+                    title={`${selectedTemplate.name} live preview`}
+                    className="w-full h-[500px] border-0"
+                  />
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+
+          {/* CTA Buttons (outside tabs so they persist) */}
+          {selectedTemplate && (
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button
+                onClick={() => handleUseTemplate(selectedTemplate)}
+                className="flex-1 bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-700 hover:to-cyan-600 text-white"
+              >
+                <Sparkles className="size-4 mr-2" />
+                Use This Template
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setSelectedTemplate(null)}
+                className="flex-1"
+              >
+                Close
+              </Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>

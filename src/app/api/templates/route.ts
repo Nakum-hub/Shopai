@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         style: t.style,
         popular: t.popular,
         featured: t.featured,
-        downloadCount: t.downloadCount,
+        createdAt: t.createdAt,
       }));
 
       const response = success({ templates }, timings.meta());

@@ -125,7 +125,7 @@ export interface Template {
   style: BrandStyle;
   popular: boolean;
   featured: boolean;
-  downloadCount: number;
+  createdAt: string;
 }
 
 // Analytics

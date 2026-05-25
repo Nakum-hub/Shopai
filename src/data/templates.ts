@@ -40,7 +40,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit Us', content: 'Location, hours, and contact information' },
     ]),
     style: { primaryColor: '#d97706', secondaryColor: '#f59e0b', fontFamily: 'Playfair Display', theme: 'elegant', mood: 'warm' },
-    popular: true, featured: true, downloadCount: 2847,
+    popular: true, featured: true, createdAt: '2024-01-15',
   },
   {
     id: 'tpl-bakery-2', name: 'French Patisserie', description: 'An elegant Parisian-inspired design with soft pastels and refined typography for high-end pastry shops.',
@@ -54,7 +54,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Find Us', content: 'Visit our boutique locations' },
     ]),
     style: { primaryColor: '#be185d', secondaryColor: '#f9a8d4', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'refined' },
-    popular: true, featured: false, downloadCount: 1923,
+    popular: true, featured: false, createdAt: '2024-01-21',
   },
   {
     id: 'tpl-bakery-3', name: 'Rustic Oven', description: 'A farmhouse-chic template with earthy tones and textured backgrounds for rustic bread bakeries.',
@@ -67,7 +67,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Location', content: 'Find us at the farmers market every Saturday' },
     ]),
     style: { primaryColor: '#92400e', secondaryColor: '#a16207', fontFamily: 'Lora', theme: 'classic', mood: 'rustic' },
-    popular: false, featured: false, downloadCount: 1456,
+    popular: false, featured: false, createdAt: '2024-01-27',
   },
   {
     id: 'tpl-bakery-4', name: 'Cake Studio', description: 'A modern, colorful template for custom cake shops and dessert studios with bold visual galleries.',
@@ -81,7 +81,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book a Consultation', content: 'Schedule your cake design session' },
     ]),
     style: { primaryColor: '#e11d48', secondaryColor: '#f43f5e', fontFamily: 'DM Sans', theme: 'bold', mood: 'playful' },
-    popular: true, featured: false, downloadCount: 3156,
+    popular: true, featured: false, createdAt: '2024-02-02',
   },
   {
     id: 'tpl-bakery-5', name: 'Daily Bread Co-op', description: 'A community-focused template with clean layout for cooperative bakeries and community-driven shops.',
@@ -94,7 +94,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Join Us', content: 'Membership info and volunteer opportunities' },
     ]),
     style: { primaryColor: '#15803d', secondaryColor: '#4ade80', fontFamily: 'Nunito', theme: 'minimal', mood: 'friendly' },
-    popular: false, featured: false, downloadCount: 987,
+    popular: false, featured: false, createdAt: '2024-02-08',
   },
   {
     id: 'tpl-bakery-6', name: 'Donut Paradise', description: 'A fun, vibrant template for donut shops and sweet treat stores with playful animations and bright colors.',
@@ -108,7 +108,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Locations, hours, and delivery info' },
     ]),
     style: { primaryColor: '#f97316', secondaryColor: '#fbbf24', fontFamily: 'Fredoka', theme: 'bold', mood: 'fun' },
-    popular: true, featured: false, downloadCount: 2543,
+    popular: true, featured: false, createdAt: '2024-02-14',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -126,7 +126,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Reservations and private dining inquiries' },
     ]),
     style: { primaryColor: '#78350f', secondaryColor: '#d97706', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'luxurious' },
-    popular: true, featured: false, downloadCount: 3521,
+    popular: true, featured: false, createdAt: '2024-02-21',
   },
   {
     id: 'tpl-restaurant-2', name: 'Sakura Sushi Bar', description: 'A sleek Japanese-inspired template with clean lines and subtle animations for sushi restaurants.',
@@ -140,7 +140,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Reserve', content: 'Book your sushi experience' },
     ]),
     style: { primaryColor: '#dc2626', secondaryColor: '#1c1917', fontFamily: 'Noto Serif JP', theme: 'minimal', mood: 'serene' },
-    popular: true, featured: true, downloadCount: 4102,
+    popular: true, featured: true, createdAt: '2024-02-27',
   },
   {
     id: 'tpl-restaurant-3', name: 'Trattoria Bella', description: 'A warm Italian-themed template with terracotta colors and rustic charm for trattorias and pizzerias.',
@@ -154,7 +154,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit Us', content: 'Reservations and directions' },
     ]),
     style: { primaryColor: '#c2410c', secondaryColor: '#fbbf24', fontFamily: 'Playfair Display', theme: 'classic', mood: 'warm' },
-    popular: false, featured: false, downloadCount: 2341,
+    popular: false, featured: false, createdAt: '2024-03-04',
   },
   {
     id: 'tpl-restaurant-4', name: 'Street Food Hub', description: 'A vibrant, energetic template for food trucks, street food vendors, and casual dining.',
@@ -168,7 +168,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Find Us', content: 'Locations and schedule' },
     ]),
     style: { primaryColor: '#ea580c', secondaryColor: '#facc15', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'energetic' },
-    popular: true, featured: false, downloadCount: 2876,
+    popular: true, featured: false, createdAt: '2024-03-10',
   },
   {
     id: 'tpl-restaurant-5', name: 'The Rooftop Lounge', description: 'A sophisticated template for rooftop bars, lounges, and upscale casual dining with stunning visual design.',
@@ -182,7 +182,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Reservations', content: 'Book your table above the city' },
     ]),
     style: { primaryColor: '#0f172a', secondaryColor: '#6366f1', fontFamily: 'Inter', theme: 'modern', mood: 'chic' },
-    popular: false, featured: false, downloadCount: 1654,
+    popular: false, featured: false, createdAt: '2024-03-16',
   },
   {
     id: 'tpl-restaurant-6', name: 'Veggie Garden', description: 'A fresh, green-themed template for vegan and vegetarian restaurants with earthy, natural aesthetics.',
@@ -196,7 +196,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Location, hours, and delivery' },
     ]),
     style: { primaryColor: '#16a34a', secondaryColor: '#86efac', fontFamily: 'DM Sans', theme: 'minimal', mood: 'fresh' },
-    popular: false, featured: false, downloadCount: 1234,
+    popular: false, featured: false, createdAt: '2024-03-23',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -214,7 +214,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Customer service and inquiries' },
     ]),
     style: { primaryColor: '#171717', secondaryColor: '#a3a3a3', fontFamily: 'Inter', theme: 'minimal', mood: 'sophisticated' },
-    popular: true, featured: false, downloadCount: 4102,
+    popular: true, featured: false, createdAt: '2024-03-29',
   },
   {
     id: 'tpl-clothing-2', name: 'Vintage Revival', description: 'A retro-inspired template for thrift stores, vintage shops, and retro fashion brands.',
@@ -227,7 +227,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Shop location and hours' },
     ]),
     style: { primaryColor: '#92400e', secondaryColor: '#d97706', fontFamily: 'Playfair Display', theme: 'classic', mood: 'nostalgic' },
-    popular: false, featured: false, downloadCount: 1876,
+    popular: false, featured: false, createdAt: '2024-04-04',
   },
   {
     id: 'tpl-clothing-3', name: 'Athleisure Pro', description: 'A bold, energetic template for sportswear and athletic clothing brands with dynamic layouts.',
@@ -241,7 +241,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Support', content: 'Sizing guide and returns' },
     ]),
     style: { primaryColor: '#dc2626', secondaryColor: '#111827', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'powerful' },
-    popular: true, featured: false, downloadCount: 2987,
+    popular: true, featured: false, createdAt: '2024-04-10',
   },
   {
     id: 'tpl-clothing-4', name: 'Thread & Needle', description: 'An elegant template for bespoke tailoring, custom suits, and made-to-measure clothing services.',
@@ -255,7 +255,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Appointments', content: 'Book your fitting consultation' },
     ]),
     style: { primaryColor: '#1e293b', secondaryColor: '#c9a96e', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'luxurious' },
-    popular: false, featured: false, downloadCount: 1543,
+    popular: false, featured: false, createdAt: '2024-04-16',
   },
   {
     id: 'tpl-clothing-5', name: 'Kids Wardrobe', description: 'A playful, colorful template for children\'s clothing stores with fun elements and parent-friendly navigation.',
@@ -269,7 +269,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Help', content: 'Size guide and customer service' },
     ]),
     style: { primaryColor: '#e11d48', secondaryColor: '#fbbf24', fontFamily: 'Nunito', theme: 'bold', mood: 'playful' },
-    popular: false, featured: false, downloadCount: 1198,
+    popular: false, featured: false, createdAt: '2024-04-22',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -286,7 +286,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Store Info', content: 'Location, hours, and support contacts' },
     ]),
     style: { primaryColor: '#0f172a', secondaryColor: '#22d3ee', fontFamily: 'Space Grotesk', theme: 'modern', mood: 'futuristic' },
-    popular: true, featured: false, downloadCount: 3893,
+    popular: true, featured: false, createdAt: '2024-04-29',
   },
   {
     id: 'tpl-electronics-2', name: 'Apple Reseller Elite', description: 'A clean, Apple-inspired template for authorized Apple resellers and premium tech boutiques.',
@@ -299,7 +299,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Store location and Genius Bar hours' },
     ]),
     style: { primaryColor: '#111827', secondaryColor: '#6b7280', fontFamily: 'SF Pro Display', theme: 'minimal', mood: 'premium' },
-    popular: true, featured: true, downloadCount: 5120,
+    popular: true, featured: true, createdAt: '2024-05-05',
   },
   {
     id: 'tpl-electronics-3', name: 'Gaming Zone', description: 'A vibrant, neon-themed template for gaming stores and PC builders with dynamic visual effects.',
@@ -313,7 +313,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Get In Touch', content: 'Store hours and support' },
     ]),
     style: { primaryColor: '#7c3aed', secondaryColor: '#06b6d4', fontFamily: 'Rajdhani', theme: 'bold', mood: 'intense' },
-    popular: true, featured: false, downloadCount: 4567,
+    popular: true, featured: false, createdAt: '2024-05-11',
   },
   {
     id: 'tpl-electronics-4', name: 'Smart Home Hub', description: 'A clean, modern template for smart home and IoT device retailers with emphasis on connectivity.',
@@ -327,7 +327,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Demo bookings and support' },
     ]),
     style: { primaryColor: '#0d9488', secondaryColor: '#14b8a6', fontFamily: 'Inter', theme: 'modern', mood: 'innovative' },
-    popular: false, featured: false, downloadCount: 1432,
+    popular: false, featured: false, createdAt: '2024-05-17',
   },
   {
     id: 'tpl-electronics-5', name: 'AudioPhile Store', description: 'A premium template for audio equipment stores, headphone brands, and music enthusiasts.',
@@ -340,7 +340,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Listening room bookings and store info' },
     ]),
     style: { primaryColor: '#1c1917', secondaryColor: '#d4a853', fontFamily: 'Lora', theme: 'elegant', mood: 'premium' },
-    popular: false, featured: false, downloadCount: 1087,
+    popular: false, featured: false, createdAt: '2024-05-23',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -358,7 +358,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book Now', content: 'Appointment booking and location' },
     ]),
     style: { primaryColor: '#ec4899', secondaryColor: '#f9a8d4', fontFamily: 'DM Sans', theme: 'modern', mood: 'feminine' },
-    popular: true, featured: false, downloadCount: 2341,
+    popular: true, featured: false, createdAt: '2024-05-30',
   },
   {
     id: 'tpl-salon-2', name: 'Barbershop Classic', description: 'A masculine, vintage-themed template for traditional barbershops with warm wood tones and classic typography.',
@@ -372,7 +372,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Find Us', content: 'Location and phone number' },
     ]),
     style: { primaryColor: '#78350f', secondaryColor: '#d97706', fontFamily: 'Playfair Display', theme: 'classic', mood: 'masculine' },
-    popular: true, featured: false, downloadCount: 2765,
+    popular: true, featured: false, createdAt: '2024-06-05',
   },
   {
     id: 'tpl-salon-3', name: 'Zen Wellness Spa', description: 'A serene, minimal template for day spas and wellness centers with calming green and white aesthetics.',
@@ -386,7 +386,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Online booking and gift certificates' },
     ]),
     style: { primaryColor: '#0d9488', secondaryColor: '#a7f3d0', fontFamily: 'Lora', theme: 'minimal', mood: 'serene' },
-    popular: false, featured: false, downloadCount: 1654,
+    popular: false, featured: false, createdAt: '2024-06-11',
   },
   {
     id: 'tpl-salon-4', name: 'Nail Art Studio', description: 'A creative, vibrant template for nail salons with colorful galleries and booking integration.',
@@ -400,7 +400,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Location, hours, and pricing' },
     ]),
     style: { primaryColor: '#e11d48', secondaryColor: '#f472b6', fontFamily: 'DM Sans', theme: 'bold', mood: 'creative' },
-    popular: false, featured: false, downloadCount: 1432,
+    popular: false, featured: false, createdAt: '2024-06-17',
   },
   {
     id: 'tpl-salon-5', name: 'Hair Color Lab', description: 'A trendy, editorial template for hair colorists and color studios with bold visuals and portfolio focus.',
@@ -414,7 +414,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Consultation bookings' },
     ]),
     style: { primaryColor: '#7c3aed', secondaryColor: '#c084fc', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'trendy' },
-    popular: true, featured: false, downloadCount: 1987,
+    popular: true, featured: false, createdAt: '2024-06-23',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -431,7 +431,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Delivery', content: 'Delivery zones and ordering info' },
     ]),
     style: { primaryColor: '#16a34a', secondaryColor: '#86efac', fontFamily: 'Nunito', theme: 'minimal', mood: 'fresh' },
-    popular: true, featured: false, downloadCount: 2134,
+    popular: true, featured: false, createdAt: '2024-06-30',
   },
   {
     id: 'tpl-grocery-2', name: 'Spice Market', description: 'A warm, aromatic template for ethnic grocery stores and spice shops with rich cultural aesthetics.',
@@ -444,7 +444,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Location, hours, and weekly specials' },
     ]),
     style: { primaryColor: '#b91c1c', secondaryColor: '#f59e0b', fontFamily: 'Lora', theme: 'classic', mood: 'warm' },
-    popular: false, featured: false, downloadCount: 987,
+    popular: false, featured: false, createdAt: '2024-07-06',
   },
   {
     id: 'tpl-grocery-3', name: 'QuickCart Express', description: 'A modern, fast-paced template for convenience stores and quick-service grocery delivery.',
@@ -457,7 +457,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Locations', content: 'Store finder and delivery zones' },
     ]),
     style: { primaryColor: '#2563eb', secondaryColor: '#22d3ee', fontFamily: 'Inter', theme: 'modern', mood: 'efficient' },
-    popular: true, featured: false, downloadCount: 3567,
+    popular: true, featured: false, createdAt: '2024-07-12',
   },
   {
     id: 'tpl-grocery-4', name: 'Wine & Cheese Cellar', description: 'An elegant template for wine shops, cheese stores, and gourmet food boutiques.',
@@ -470,7 +470,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Store location and event calendar' },
     ]),
     style: { primaryColor: '#7f1d1d', secondaryColor: '#d4a853', fontFamily: 'Playfair Display', theme: 'elegant', mood: 'sophisticated' },
-    popular: false, featured: false, downloadCount: 1234,
+    popular: false, featured: false, createdAt: '2024-07-18',
   },
   {
     id: 'tpl-grocery-5', name: 'Butcher & Provisions', description: 'A rustic, trustworthy template for butcher shops and specialty meat/seafood markets.',
@@ -483,7 +483,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Location, hours, and pre-orders' },
     ]),
     style: { primaryColor: '#991b1b', secondaryColor: '#78716c', fontFamily: 'Roboto Condensed', theme: 'bold', mood: 'rustic' },
-    popular: false, featured: false, downloadCount: 876,
+    popular: false, featured: false, createdAt: '2024-07-24',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -500,7 +500,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit Us', content: 'Store location and hours' },
     ]),
     style: { primaryColor: '#ea580c', secondaryColor: '#f59e0b', fontFamily: 'Roboto Condensed', theme: 'bold', mood: 'industrial' },
-    popular: false, featured: false, downloadCount: 982,
+    popular: false, featured: false, createdAt: '2024-07-30',
   },
   {
     id: 'tpl-hardware-2', name: 'DIY Paradise', description: 'A colorful, inspiring template for DIY and craft supply stores with project ideas and tutorials.',
@@ -513,7 +513,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Store finder and workshop schedule' },
     ]),
     style: { primaryColor: '#16a34a', secondaryColor: '#eab308', fontFamily: 'Nunito', theme: 'modern', mood: 'inspiring' },
-    popular: true, featured: false, downloadCount: 1876,
+    popular: true, featured: false, createdAt: '2024-08-06',
   },
   {
     id: 'tpl-hardware-3', name: 'Garden & Outdoor', description: 'A nature-themed template for garden centers and outdoor living stores with earthy greens and warm browns.',
@@ -526,7 +526,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Greenhouse location and seasonal hours' },
     ]),
     style: { primaryColor: '#166534', secondaryColor: '#a16207', fontFamily: 'Lora', theme: 'classic', mood: 'natural' },
-    popular: false, featured: false, downloadCount: 1234,
+    popular: false, featured: false, createdAt: '2024-08-12',
   },
   {
     id: 'tpl-hardware-4', name: 'PlumbPro Supply', description: 'A professional template for plumbing and electrical supply stores serving contractors and homeowners.',
@@ -539,7 +539,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Trade counter hours and contractor signup' },
     ]),
     style: { primaryColor: '#1e3a5f', secondaryColor: '#3b82f6', fontFamily: 'Roboto', theme: 'modern', mood: 'professional' },
-    popular: false, featured: false, downloadCount: 765,
+    popular: false, featured: false, createdAt: '2024-08-18',
   },
   {
     id: 'tpl-hardware-5', name: 'Smart Home Depot', description: 'A modern template for home improvement superstores with organized departments and project guides.',
@@ -553,7 +553,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Store locator and hours' },
     ]),
     style: { primaryColor: '#dc2626', secondaryColor: '#f59e0b', fontFamily: 'Inter', theme: 'bold', mood: 'reliable' },
-    popular: true, featured: false, downloadCount: 2456,
+    popular: true, featured: false, createdAt: '2024-08-24',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -571,7 +571,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Appointment scheduling and directions' },
     ]),
     style: { primaryColor: '#0d9488', secondaryColor: '#22d3ee', fontFamily: 'Nunito', theme: 'modern', mood: 'clean' },
-    popular: true, featured: false, downloadCount: 2567,
+    popular: true, featured: false, createdAt: '2024-08-30',
   },
   {
     id: 'tpl-medical-2', name: 'Dental Smile', description: 'A bright, friendly template for dental practices with emphasis on patient comfort and modern care.',
@@ -585,7 +585,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Online appointment scheduling' },
     ]),
     style: { primaryColor: '#0891b2', secondaryColor: '#a5f3fc', fontFamily: 'DM Sans', theme: 'modern', mood: 'friendly' },
-    popular: true, featured: false, downloadCount: 3234,
+    popular: true, featured: false, createdAt: '2024-09-06',
   },
   {
     id: 'tpl-medical-3', name: 'VetCare Clinic', description: 'A warm, caring template for veterinary clinics and pet hospitals with playful animal-themed elements.',
@@ -599,7 +599,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Emergency', content: '24/7 emergency line and appointments' },
     ]),
     style: { primaryColor: '#16a34a', secondaryColor: '#86efac', fontFamily: 'Nunito', theme: 'minimal', mood: 'caring' },
-    popular: false, featured: false, downloadCount: 1876,
+    popular: false, featured: false, createdAt: '2024-09-12',
   },
   {
     id: 'tpl-medical-4', name: 'PhysioActive', description: 'A dynamic, energetic template for physiotherapy and sports medicine clinics with active lifestyle imagery.',
@@ -613,7 +613,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Online booking and clinic locations' },
     ]),
     style: { primaryColor: '#059669', secondaryColor: '#f59e0b', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'energetic' },
-    popular: false, featured: false, downloadCount: 1345,
+    popular: false, featured: false, createdAt: '2024-09-18',
   },
   {
     id: 'tpl-medical-5', name: 'EyeCare Optometry', description: 'A crisp, clean template for optometry practices and eyewear boutiques with emphasis on style and clarity.',
@@ -627,7 +627,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Appointment scheduling and insurance info' },
     ]),
     style: { primaryColor: '#1e40af', secondaryColor: '#93c5fd', fontFamily: 'Inter', theme: 'modern', mood: 'professional' },
-    popular: false, featured: false, downloadCount: 1123,
+    popular: false, featured: false, createdAt: '2024-09-24',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -645,7 +645,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Boutique location and private shopping' },
     ]),
     style: { primaryColor: '#b8860b', secondaryColor: '#f5f5dc', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'luxurious' },
-    popular: true, featured: true, downloadCount: 3456,
+    popular: true, featured: true, createdAt: '2024-09-30',
   },
   {
     id: 'tpl-boutique-2', name: 'Home Decor Studio', description: 'A warm, inviting template for home decor and interior design boutiques with lifestyle photography.',
@@ -659,7 +659,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Showroom location and hours' },
     ]),
     style: { primaryColor: '#92400e', secondaryColor: '#d4a853', fontFamily: 'Lora', theme: 'classic', mood: 'warm' },
-    popular: false, featured: false, downloadCount: 2134,
+    popular: false, featured: false, createdAt: '2024-10-07',
   },
   {
     id: 'tpl-boutique-3', name: 'Artisan Candle Co.', description: 'A cozy, atmospheric template for candle makers and fragrance boutiques with warm, glowing aesthetics.',
@@ -673,7 +673,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Shop', content: 'Online store and market schedule' },
     ]),
     style: { primaryColor: '#9a3412', secondaryColor: '#fbbf24', fontFamily: 'DM Sans', theme: 'elegant', mood: 'cozy' },
-    popular: false, featured: false, downloadCount: 1567,
+    popular: false, featured: false, createdAt: '2024-10-13',
   },
   {
     id: 'tpl-boutique-4', name: 'Watch Collector', description: 'A sophisticated template for watch boutiques and luxury timepiece retailers with refined dark design.',
@@ -687,7 +687,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Private viewing appointments' },
     ]),
     style: { primaryColor: '#1c1917', secondaryColor: '#d4a853', fontFamily: 'Playfair Display', theme: 'elegant', mood: 'prestigious' },
-    popular: false, featured: false, downloadCount: 987,
+    popular: false, featured: false, createdAt: '2024-10-19',
   },
   {
     id: 'tpl-boutique-5', name: 'Gift Box Boutique', description: 'A cheerful, colorful template for gift shops and curated gift box services.',
@@ -701,7 +701,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Order', content: 'Custom orders and inquiries' },
     ]),
     style: { primaryColor: '#e11d48', secondaryColor: '#fbbf24', fontFamily: 'Nunito', theme: 'bold', mood: 'festive' },
-    popular: true, featured: false, downloadCount: 2345,
+    popular: true, featured: false, createdAt: '2024-10-25',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -720,7 +720,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Contact form and details' },
     ]),
     style: { primaryColor: '#475569', secondaryColor: '#64748b', fontFamily: 'Inter', theme: 'classic', mood: 'professional' },
-    popular: true, featured: false, downloadCount: 2456,
+    popular: true, featured: false, createdAt: '2024-10-31',
   },
   {
     id: 'tpl-service-2', name: 'Legal Associates', description: 'A dignified, authoritative template for law firms and legal services with emphasis on trust and expertise.',
@@ -735,7 +735,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Consult', content: 'Schedule a confidential consultation' },
     ]),
     style: { primaryColor: '#1e293b', secondaryColor: '#94a3b8', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'authoritative' },
-    popular: false, featured: false, downloadCount: 1876,
+    popular: false, featured: false, createdAt: '2024-11-06',
   },
   {
     id: 'tpl-service-3', name: 'Creative Agency', description: 'A bold, portfolio-focused template for design agencies and creative studios with visual impact.',
@@ -750,7 +750,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Get in touch' },
     ]),
     style: { primaryColor: '#7c3aed', secondaryColor: '#06b6d4', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'creative' },
-    popular: true, featured: true, downloadCount: 4567,
+    popular: true, featured: true, createdAt: '2024-11-13',
   },
   {
     id: 'tpl-service-4', name: 'CleanPro Services', description: 'A fresh, clean template for cleaning services and maintenance companies with trust-building elements.',
@@ -764,7 +764,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Get a free quote in minutes' },
     ]),
     style: { primaryColor: '#0d9488', secondaryColor: '#a7f3d0', fontFamily: 'Nunito', theme: 'minimal', mood: 'fresh' },
-    popular: false, featured: false, downloadCount: 1654,
+    popular: false, featured: false, createdAt: '2024-11-19',
   },
   {
     id: 'tpl-service-5', name: 'FitLife Coaching', description: 'An energetic template for personal trainers and fitness coaches with motivational design.',
@@ -779,7 +779,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Book your free consultation' },
     ]),
     style: { primaryColor: '#dc2626', secondaryColor: '#f97316', fontFamily: 'Rajdhani', theme: 'bold', mood: 'energetic' },
-    popular: false, featured: false, downloadCount: 1234,
+    popular: false, featured: false, createdAt: '2024-11-25',
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -798,7 +798,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Get in touch with our team' },
     ]),
     style: { primaryColor: '#be185d', secondaryColor: '#f9a8d4', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'romantic' },
-    popular: true, featured: false, downloadCount: 3456,
+    popular: true, featured: false, createdAt: '2024-12-01',
   },
   {
     id: 'tpl-other-2', name: 'Real Estate Elite', description: 'A premium template for real estate agents and property firms with property listing layouts and search.',
@@ -812,7 +812,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Contact', content: 'Schedule a viewing or listing appointment' },
     ]),
     style: { primaryColor: '#1e3a5f', secondaryColor: '#d4a853', fontFamily: 'Playfair Display', theme: 'elegant', mood: 'luxurious' },
-    popular: true, featured: false, downloadCount: 4567,
+    popular: true, featured: false, createdAt: '2024-12-07',
   },
   {
     id: 'tpl-other-3', name: 'Photography Studio', description: 'A visual-first template for photography studios and freelance photographers with stunning portfolio layouts.',
@@ -827,7 +827,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Inquire about your session' },
     ]),
     style: { primaryColor: '#111827', secondaryColor: '#9ca3af', fontFamily: 'Inter', theme: 'minimal', mood: 'artistic' },
-    popular: true, featured: false, downloadCount: 3876,
+    popular: true, featured: false, createdAt: '2024-12-14',
   },
   {
     id: 'tpl-other-4', name: 'Music Academy', description: 'A vibrant, creative template for music schools and academies with engaging course displays.',
@@ -842,7 +842,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Enroll', content: 'Registration and contact info' },
     ]),
     style: { primaryColor: '#7c3aed', secondaryColor: '#f59e0b', fontFamily: 'DM Sans', theme: 'bold', mood: 'creative' },
-    popular: false, featured: false, downloadCount: 1543,
+    popular: false, featured: false, createdAt: '2024-12-20',
   },
   {
     id: 'tpl-other-5', name: 'Yoga & Meditation', description: 'A peaceful, zen-inspired template for yoga studios and meditation centers with calming design.',
@@ -857,7 +857,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Find Us', content: 'Schedule and location' },
     ]),
     style: { primaryColor: '#5b21b6', secondaryColor: '#c4b5fd', fontFamily: 'Lora', theme: 'minimal', mood: 'peaceful' },
-    popular: false, featured: false, downloadCount: 1987,
+    popular: false, featured: false, createdAt: '2024-12-26',
   },
   {
     id: 'tpl-other-6', name: 'Childcare Center', description: 'A warm, friendly template for daycare centers and preschools with parent-focused features.',
@@ -872,7 +872,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Enroll', content: 'Schedule a tour and registration' },
     ]),
     style: { primaryColor: '#f59e0b', secondaryColor: '#fbbf24', fontFamily: 'Nunito', theme: 'modern', mood: 'playful' },
-    popular: false, featured: false, downloadCount: 1234,
+    popular: false, featured: false, createdAt: '2025-01-01',
   },
   {
     id: 'tpl-other-7', name: 'Auto Detailing', description: 'A sleek, professional template for car detailing and auto services with dark automotive styling.',
@@ -886,7 +886,7 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Book', content: 'Schedule your detail appointment' },
     ]),
     style: { primaryColor: '#0f172a', secondaryColor: '#dc2626', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'sleek' },
-    popular: false, featured: false, downloadCount: 1456,
+    popular: false, featured: false, createdAt: '2025-01-07',
   },
   {
     id: 'tpl-other-8', name: 'Coffee Roasters', description: 'A rich, aromatic template for coffee roasters and specialty cafes with warm, inviting design.',
@@ -900,6 +900,6 @@ export const allTemplates: Template[] = [
       { type: 'contact', title: 'Visit', content: 'Cafe location, hours, and online ordering' },
     ]),
     style: { primaryColor: '#78350f', secondaryColor: '#a16207', fontFamily: 'Lora', theme: 'classic', mood: 'warm' },
-    popular: true, featured: false, downloadCount: 2678,
+    popular: true, featured: false, createdAt: '2025-01-14',
   },
 ];
