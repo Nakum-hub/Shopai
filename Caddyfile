@@ -1,3 +1,14 @@
+# =============================================================================
+# StoreCraft AI — Caddy Reverse Proxy (Development)
+# =============================================================================
+# Purpose: Runs on :81 during local development. Routes requests to the
+# Next.js app on :3000 by default, or to a dynamically specified port via
+# the `?XTransformPort=<port>` query parameter (used by the generation
+# pipeline to preview storefronts on ephemeral preview ports).
+#
+# Production: Not used — nginx handles routing in Docker (see nginx/nginx.conf).
+# =============================================================================
+
 :81 {
 	@transform_port_query {
 		query XTransformPort=*
