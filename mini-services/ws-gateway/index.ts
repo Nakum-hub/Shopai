@@ -226,8 +226,8 @@ const activeConnections = new Map<string, ConnectionInfo>();
 const sessionConnections = new Map<string, Set<string>>();
 const messageCounters = new Map<string, { count: number; resetAt: number }>();
 
-/** WeakMap of socket.id → Socket for backpressure recovery signals (avoids memory leaks). */
-const socketRef = new WeakMap<string, Socket>();
+/** Map of socket.id → Socket for backpressure recovery signals. Entries cleaned up in untrackConnection. */
+const socketRef = new Map<string, Socket>();
 
 // =============================================================================
 // Message Replay Ring Buffer
@@ -612,6 +612,7 @@ function untrackConnection(socketId: string): void {
 
   activeConnections.delete(socketId);
   messageCounters.delete(socketId);
+  socketRef.delete(socketId); // Clean up socket reference to prevent memory leak
 }
 
 // =============================================================================

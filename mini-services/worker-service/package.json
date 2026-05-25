@@ -1,6 +1,6 @@
 {
   "name": "@storecraft/worker-service",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "scripts": {
     "dev": "bun --hot index.ts"
@@ -9,7 +9,7 @@
     "bullmq": "^5.0.0",
     "@prisma/client": "^6.0.0",
     "ioredis": "^5.0.0",
-    "z-ai-web-dev-sdk": "latest"
+    "z-ai-web-dev-sdk": "^0.0.18"
   },
   "devDependencies": {
     "@types/bun": "latest"

@@ -9,16 +9,59 @@ import { AppHeader } from '@/components/layout/app-header';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
 
-// Lazy-loaded views
-import { BuilderView } from '@/components/builder/builder-view';
-import { PreviewView } from '@/components/preview/preview-view';
-import { ProjectsView } from '@/components/projects/projects-view';
-import { TemplatesView } from '@/components/templates/templates-view';
-import { BlocksView } from '@/components/blocks/blocks-view';
-import { DesignLibraryView } from '@/components/design-library/design-library-view';
-import { AnalyticsView } from '@/components/analytics/analytics-view';
-import { SettingsView } from '@/components/settings/settings-view';
-import { AgentsView } from '@/components/agents/agents-view';
+// Lazy-loaded views (dynamic imports for code splitting)
+// Previously static imports — now lazy-loaded for performance:
+// import { BuilderView } from '@/components/builder/builder-view';
+// import { PreviewView } from '@/components/preview/preview-view';
+// import { ProjectsView } from '@/components/projects/projects-view';
+// import { TemplatesView } from '@/components/templates/templates-view';
+// import { BlocksView } from '@/components/blocks/blocks-view';
+// import { DesignLibraryView } from '@/components/design-library/design-library-view';
+// import { AnalyticsView } from '@/components/analytics/analytics-view';
+// import { SettingsView } from '@/components/settings/settings-view';
+// import { AgentsView } from '@/components/agents/agents-view';
+
+import { ErrorBoundary } from '@/components/error-boundary';
+import dynamic from 'next/dynamic';
+
+const BuilderView = dynamic(() => import('@/components/builder/builder-view').then(m => ({ default: m.BuilderView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const PreviewView = dynamic(() => import('@/components/preview/preview-view').then(m => ({ default: m.PreviewView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const ProjectsView = dynamic(() => import('@/components/projects/projects-view').then(m => ({ default: m.ProjectsView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const TemplatesView = dynamic(() => import('@/components/templates/templates-view').then(m => ({ default: m.TemplatesView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const BlocksView = dynamic(() => import('@/components/blocks/blocks-view').then(m => ({ default: m.BlocksView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const DesignLibraryView = dynamic(() => import('@/components/design-library/design-library-view').then(m => ({ default: m.DesignLibraryView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const AnalyticsView = dynamic(() => import('@/components/analytics/analytics-view').then(m => ({ default: m.AnalyticsView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const SettingsView = dynamic(() => import('@/components/settings/settings-view').then(m => ({ default: m.SettingsView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+const AgentsView = dynamic(() => import('@/components/agents/agents-view').then(m => ({ default: m.AgentsView })), {
+  loading: () => <ViewLoadingSkeleton />,
+});
+
+function ViewLoadingSkeleton() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <p className="text-sm text-muted-foreground animate-pulse">Loading view...</p>
+      </div>
+    </div>
+  );
+}
 
 const viewComponents: Record<string, React.ComponentType> = {
   builder: BuilderView,
@@ -47,13 +90,15 @@ function AppContent() {
       >
         <AppHeader />
         <main className="flex-1 p-6 overflow-auto">
-          <ViewComponent />
+          <ErrorBoundary>
+            <ViewComponent />
+          </ErrorBoundary>
         </main>
         <footer className="mt-auto py-3 px-6 bg-card/50 backdrop-blur-sm border-t border-border">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>© 2025 StoreCraft AI</span>
+            <span>© {new Date().getFullYear()} StoreCraft AI</span>
             <span>Voice-to-Website Platform</span>
-            <span>v1.0.0</span>
+            <span>v2.0.0</span>
           </div>
         </footer>
       </div>

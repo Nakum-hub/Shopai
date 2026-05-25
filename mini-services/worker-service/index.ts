@@ -469,6 +469,20 @@ function createWorkers() {
 // Health Check HTTP Server
 // -----------------------------------------------------------------------------
 
+// Shared Redis client for health checks (prevents connection leak per request)
+let healthRedis: Redis | null = null;
+function getHealthRedis(): Redis {
+  if (!healthRedis) {
+    healthRedis = new Redis(REDIS_URL, {
+      connectTimeout: 3000,
+      maxRetriesPerRequest: 1,
+      lazyConnect: true,
+    });
+    healthRedis.on('error', () => {}); // Suppress unhandled errors
+  }
+  return healthRedis;
+}
+
 function startHealthServer() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const http = require('http');
@@ -481,17 +495,16 @@ function startHealthServer() {
         await db.$queryRawUnsafe('SELECT 1 as ok');
         const dbLatencyMs = Date.now() - dbStart;
 
-        // Check Redis connectivity
+        // Check Redis connectivity (reuses shared connection)
         const redisStart = Date.now();
-        const redis = new Redis(REDIS_URL, { connectTimeout: 3000 });
+        const redis = getHealthRedis();
         await redis.ping();
-        redis.disconnect();
         const redisLatencyMs = Date.now() - redisStart;
 
         const health = {
           status: 'healthy',
           service: 'storecraft-worker',
-          version: '1.0.0',
+          version: '2.0.0',
           timestamp: new Date().toISOString(),
           uptime: process.uptime(),
           pid: process.pid,

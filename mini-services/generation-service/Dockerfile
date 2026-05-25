@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
-COPY package.json bun.lock ./
+COPY mini-services/generation-service/package.json mini-services/generation-service/bun.lock* ./
 RUN bun install --frozen-lockfile --production=false
 
 # Copy Prisma schema from project root (build context is project root)

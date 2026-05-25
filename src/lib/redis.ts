@@ -18,18 +18,18 @@ import Redis, { type RedisOptions } from 'ioredis';
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
 
 const redisOptions: RedisOptions = {
-  maxRetriesPerRequest: 1,
+  maxRetriesPerRequest: 3,
   retryStrategy(times) {
-    if (times > 2) return null; // Stop retrying after 2 attempts
-    return Math.min(times * 200, 1000); // 200ms → 1000ms
+    if (times > 5) return null; // Stop retrying after 5 attempts
+    return Math.min(times * 500, 3000); // 500ms → 3000ms
   },
   reconnectOnError(err) {
     return err.message.includes('READONLY');
   },
   enableReadyCheck: false, // Skip ready check to avoid timeout
   lazyConnect: true,
-  connectTimeout: 2000, // 2 second connect timeout
-  commandTimeout: 2000, // 2 second command timeout
+  connectTimeout: 5000, // 5 second connect timeout
+  commandTimeout: 3000, // 3 second command timeout
   offlineQueue: false, // Don't queue commands when offline
 };
 

@@ -6,7 +6,6 @@
 # Architecture: Next.js + PostgreSQL 16 + Redis 7 + BullMQ + WebSocket Gateway
 # =============================================================================
 
-version: "3.8"
 
 services:
   # ---------------------------------------------------------------------------
@@ -16,8 +15,8 @@ services:
     image: postgres:16-alpine
     container_name: storecraft-postgres
     restart: unless-stopped
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5432:5432"  # Uncomment for local dev access
     environment:
       POSTGRES_DB: storecraft
       POSTGRES_USER: storecraft
@@ -40,8 +39,8 @@ services:
     image: redis:7-alpine
     container_name: storecraft-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"  # Uncomment for local dev access
     command: >
       redis-server
       --maxmemory 256mb
@@ -79,6 +78,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-changeme-in-production}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-http://localhost:3000}
+      - WS_JWT_SECRET=${WS_JWT_SECRET:-changeme-ws-jwt-secret}
     volumes:
       - app-logs:/app/logs
     depends_on:
@@ -110,8 +110,8 @@ services:
       dockerfile: mini-services/generation-service/Dockerfile
     container_name: storecraft-generation
     restart: unless-stopped
-    ports:
-      - "3002:3002"
+    # ports:
+    #   - "3002:3002"  # Internal only in production
     environment:
       - NODE_ENV=production
       - PORT=3002
@@ -144,12 +144,13 @@ services:
       dockerfile: mini-services/ws-gateway/Dockerfile
     container_name: storecraft-ws-gateway
     restart: unless-stopped
-    ports:
-      - "3005:3005"
+    # ports:
+    #   - "3005:3005"  # Internal only in production
     environment:
       - NODE_ENV=production
       - WS_GATEWAY_PORT=3005
       - REDIS_URL=redis://redis:6379
+      - WS_JWT_SECRET=${WS_JWT_SECRET:-changeme-ws-jwt-secret}
     depends_on:
       redis:
         condition: service_healthy
@@ -178,8 +179,8 @@ services:
       dockerfile: mini-services/worker-service/Dockerfile
     container_name: storecraft-worker
     restart: unless-stopped
-    ports:
-      - "3004:3004"
+    # ports:
+    #   - "3004:3004"  # Internal only in production
     environment:
       - NODE_ENV=production
       - WORKER_PORT=3004

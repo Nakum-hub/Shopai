@@ -164,27 +164,46 @@ export const authOptions: NextAuthOptions = {
     }),
 
     // -------------------------------------------------------------------------
-    // 2. Google OAuth — only enabled if env vars are set
+    // 2. Google OAuth — only registered when GOOGLE_CLIENT_ID is configured
     // -------------------------------------------------------------------------
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-      allowDangerousEmailAccountLinking: true,
-    }),
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          GoogleProvider({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            allowDangerousEmailAccountLinking: true,
+          }),
+        ]
+      : []),
 
     // -------------------------------------------------------------------------
-    // 3. Email Magic Link — only enabled if EMAIL_SERVER is set
+    // 3. Email Magic Link — only registered when EMAIL_SERVER is configured
     // -------------------------------------------------------------------------
-    EmailProvider({
-      server: process.env.EMAIL_SERVER || '',
-      from: process.env.EMAIL_FROM || 'noreply@storecraft.ai',
-    }),
+    ...(process.env.EMAIL_SERVER
+      ? [
+          EmailProvider({
+            server: process.env.EMAIL_SERVER,
+            from: process.env.EMAIL_FROM || 'noreply@storecraft.ai',
+          }),
+        ]
+      : []),
   ],
 
   // -------------------------------------------------------------------------
-  // Secret
+  // Secret — required in production, fallback allowed in development only
   // -------------------------------------------------------------------------
-  secret: process.env.NEXTAUTH_SECRET || 'storecraft-dev-secret-change-in-production',
+  secret: (() => {
+    const secret = process.env.NEXTAUTH_SECRET;
+    if (secret) return secret;
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '[AUTH] NEXTAUTH_SECRET environment variable is required in production. ' +
+        'Generate one with: openssl rand -base64 32'
+      );
+    }
+    console.warn('[AUTH] WARNING: Using fallback NEXTAUTH_SECRET — set a real secret for production');
+    return 'storecraft-dev-secret-change-in-production';
+  })(),
 };
 
 // -----------------------------------------------------------------------------
