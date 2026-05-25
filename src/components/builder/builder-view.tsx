@@ -758,7 +758,7 @@ function VoiceInputSection() {
         description: 'Your storefront is ready for preview.',
       });
 
-      // Persist to SQLite database in the background (non-blocking)
+      // Persist to database in the background (non-blocking)
       // If DB save fails, the storefront still works in-memory
       try {
         const res = await fetch('/api/storefronts', {

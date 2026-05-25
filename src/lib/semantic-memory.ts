@@ -2,7 +2,7 @@
 // Semantic Memory System
 // =============================================================================
 // Persistent memory for business profiles, user preferences, generation
-// insights, and conversation facts. Uses SQLite + Prisma for durability.
+// insights, and conversation facts. Uses PostgreSQL + Prisma for durability.
 // =============================================================================
 
 import { db } from '@/lib/db';

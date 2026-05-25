@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 
 // =============================================================================
-// Database Client (SQLite / PostgreSQL — auto-detected from DATABASE_URL)
+// Database Client — PostgreSQL via Prisma ORM
 // =============================================================================
 // Features:
 // 1. Singleton pattern (prevents connection leaks in dev hot reload)
@@ -23,20 +23,11 @@ const globalForPrisma = globalThis as unknown as {
 // -----------------------------------------------------------------------------
 
 const createPrismaClient = () => {
-  const isSqlite = (process.env.DATABASE_URL || '').startsWith('file:');
-
   const client = new PrismaClient({
     log: process.env.NODE_ENV === 'development'
       ? ['warn', 'error']
       : ['error'],
   });
-
-  // SQLite: enable WAL mode for better concurrent read performance
-  if (isSqlite) {
-    // Use queryRaw instead of executeRaw for PRAGMA (SQLite PRAGMAs return results)
-    client.$queryRawUnsafe('PRAGMA journal_mode=WAL').catch(() => {});
-    client.$queryRawUnsafe('PRAGMA busy_timeout=5000').catch(() => {});
-  }
 
   return client;
 };
@@ -53,7 +44,7 @@ if (process.env.NODE_ENV !== 'production') {
 
 /**
  * Verify database connectivity and return diagnostic info.
- * Works with both SQLite and PostgreSQL.
+ * Works with PostgreSQL.
  */
 export async function dbHealthCheck(): Promise<{
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -66,51 +57,30 @@ export async function dbHealthCheck(): Promise<{
   const start = Date.now();
 
   try {
-    const isSqlite = (process.env.DATABASE_URL || '').startsWith('file:');
+    const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
+      `SELECT version() as version`
+    );
+    const version = result[0]?.version || 'unknown';
 
-    if (isSqlite) {
-      // SQLite health check
-      const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
-        `SELECT sqlite_version() as version`
-      );
-      const version = result[0]?.version || 'unknown';
+    const poolStats = await db.$queryRawUnsafe<Array<{ count: number }>>(
+      `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
+    );
+    const activeConnections = poolStats[0]?.count || 0;
 
-      const latencyMs = Date.now() - start;
-      return {
-        status: latencyMs < 50 ? 'healthy' : latencyMs < 200 ? 'degraded' : 'unhealthy',
-        latencyMs,
-        poolSize: 1,
-        activeConnections: 1,
-        maxConnections: 1,
-        version: `SQLite ${version}`,
-      };
-    } else {
-      // PostgreSQL health check
-      const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
-        `SELECT version() as version`
-      );
-      const version = result[0]?.version || 'unknown';
+    const maxResult = await db.$queryRawUnsafe<Array<{ max_connections: number }>>(
+      `SHOW max_connections`
+    );
+    const maxConnections = maxResult[0]?.max_connections || 100;
 
-      const poolStats = await db.$queryRawUnsafe<Array<{ count: number }>>(
-        `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
-      );
-      const activeConnections = poolStats[0]?.count || 0;
-
-      const maxResult = await db.$queryRawUnsafe<Array<{ max_connections: number }>>(
-        `SHOW max_connections`
-      );
-      const maxConnections = maxResult[0]?.max_connections || 100;
-
-      const latencyMs = Date.now() - start;
-      return {
-        status: latencyMs < 50 ? 'healthy' : latencyMs < 200 ? 'degraded' : 'unhealthy',
-        latencyMs,
-        poolSize: activeConnections,
-        activeConnections,
-        maxConnections,
-        version,
-      };
-    }
+    const latencyMs = Date.now() - start;
+    return {
+      status: latencyMs < 50 ? 'healthy' : latencyMs < 200 ? 'degraded' : 'unhealthy',
+      latencyMs,
+      poolSize: activeConnections,
+      activeConnections,
+      maxConnections,
+      version,
+    };
   } catch (error) {
     return {
       status: 'unhealthy',

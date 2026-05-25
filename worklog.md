@@ -780,3 +780,35 @@ Stage Summary:
 - Tenant isolation rewritten to use real NextAuth sessions
 - Server-side auth utilities (requireAuth, getAuthSession, withAuth HOC)
 - Ownership checks on storefront CRUD operations
+
+---
+Task ID: env-fix
+Agent: Main Agent
+Task: Fix .env DATABASE_URL pointing to deleted SQLite file and missing REDIS_URL
+
+Work Log:
+- Found .env still had DATABASE_URL=file:/home/z/my-project/db/custom.db (absolute path)
+- Found prisma/schema.prisma still had provider = "sqlite" despite previous audit claiming PostgreSQL migration
+- Found src/lib/db.ts still had SQLite PRAGMA calls (journal_mode=WAL, busy_timeout)
+- Found 5 files with stale SQLite comments/references
+- Fixed .env: DATABASE_URL=postgresql://storecraft:password@localhost:5432/storecraft?connection_limit=10&pool_timeout=30
+- Fixed .env: Added REDIS_URL=redis://localhost:6379
+- Fixed .env: Added documentation comments for all env vars including optional Google OAuth and Email provider
+- Fixed prisma/schema.prisma: changed provider from "sqlite" to "postgresql"
+- Rewrote src/lib/db.ts: removed all SQLite-specific code (PRAGMA, WAL mode, SQLite health check, SQLite detection logic)
+- Fixed src/lib/semantic-memory.ts comment: "Uses SQLite + Prisma" → "Uses PostgreSQL + Prisma"
+- Fixed src/lib/scalability.ts comment: "Designed for SQLite" → "Built for PostgreSQL + Redis"
+- Fixed src/components/builder/builder-view.tsx comment: "Persist to SQLite database" → "Persist to database"
+- Ran bunx prisma generate — successfully generated PostgreSQL client
+- Verified dev server starts cleanly on port 3000
+- Only remaining SQLite reference is in database-architecture.ts comparison table (intentional documentation)
+
+Stage Summary:
+- .env now points to PostgreSQL with connection pooling parameters
+- REDIS_URL added for cache/queue/session infrastructure
+- Prisma schema provider corrected to postgresql
+- All SQLite-specific runtime code removed from db.ts
+- 3 stale comment references updated across 3 files
+- Dev server confirmed running on port 3000
+- NOTE: PostgreSQL and Redis not available in sandbox environment; production deployment via docker-compose.yml required
+

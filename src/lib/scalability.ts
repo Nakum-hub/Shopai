@@ -2,8 +2,8 @@
 // Scalability Layer — Connection Pool & Scaling Abstractions
 // =============================================================================
 // Provides connection management, backpressure handling, resource limits,
-// and horizontal scaling preparation. Designed for SQLite but structured
-// to be swapped for PostgreSQL/Redis when migrating to production.
+// and horizontal scaling preparation. Built for PostgreSQL + Redis
+// with support for horizontal scaling in production.
 // =============================================================================
 
 // -----------------------------------------------------------------------------
