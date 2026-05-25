@@ -40,6 +40,20 @@ export function AuthGate({ children }: AuthGateProps) {
     setAuthDialogOpen(true);
   }, []);
 
+  // Listen for custom events dispatched by LandingPage buttons
+  useEffect(() => {
+    function handleAuthEvent(e: Event) {
+      const action = (e as CustomEvent).detail;
+      if (action === 'signin') {
+        handleSignInClick();
+      } else if (action === 'getstarted') {
+        handleGetStartedClick();
+      }
+    }
+    window.addEventListener('storecraft:auth', handleAuthEvent);
+    return () => window.removeEventListener('storecraft:auth', handleAuthEvent);
+  }, [handleSignInClick, handleGetStartedClick]);
+
   // Show loading spinner while checking session
   if (status === 'loading') {
     return (

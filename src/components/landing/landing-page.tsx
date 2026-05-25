@@ -484,7 +484,7 @@ function HeroSection() {
             <ArrowRight className="w-5 h-5 ml-1" />
           </Button>
           <Button
-            onClick={() => signIn()}
+            onClick={authGetStarted}
             size="lg"
             variant="outline"
             className="border-zinc-700/60 bg-zinc-800/30 hover:bg-zinc-800/70 text-zinc-200 hover:text-zinc-100 rounded-xl px-8 h-12 text-base backdrop-blur-sm"
