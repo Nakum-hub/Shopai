@@ -851,3 +851,26 @@ Stage Summary:
 - Dev server confirmed running with 200 response
 - Pre-existing lint errors in use-hardened-ws.ts unchanged (unrelated)
 
+
+---
+Task ID: preview-fixes
+Agent: Main Agent
+Task: Fix 5 remaining preview-view issues — section toggle, Show All, overlay, edit mode, browser URL
+
+Work Log:
+- Section toggle/reorder already had DOM manipulation logic in displayHtml useMemo from previous edit (verified working)
+- Loading overlay: parent div was missing "relative" class for absolute positioning — added "relative" to the SandboxedPreview wrapper div
+- Show All Sections button: had no onClick handler — added onClick={() => setSections(prev => prev.map(s => ({ ...s, visible: true })))}
+- Browser chrome URL: showed "businessname.com" which is misleading — changed to "businessname.storecraft.app" and fallback "storecraft.app"
+- Edit Mode toggle: was pure decoration (toggled previewMode state but nothing read it) — removed the entire toggle to be honest instead of fake
+- Cleaned up unused imports: previewMode, setPreviewMode removed from useAppStore destructuring
+
+Stage Summary:
+- Section visibility toggle now actually hides/shows sections in the preview via DOMParser manipulation
+- Section DnD reorder changes DOM element order in the preview
+- Show All Sections button restores all hidden sections
+- Loading overlay correctly constrained to its parent div
+- Browser chrome shows realistic StoreCraft subdomain
+- Edit Mode toggle removed (was fake UI)
+- Dev server 200, lint clean (only pre-existing use-hardened-ws.ts errors)
+

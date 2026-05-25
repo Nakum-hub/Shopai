@@ -822,8 +822,6 @@ export function PreviewView() {
     currentJob,
     businessProfile,
     previewDevice,
-    previewMode,
-    setPreviewMode,
     setCurrentView,
     updateStorefront,
   } = useAppStore();
@@ -847,11 +845,75 @@ export function PreviewView() {
   );
 
   // Resolve the HTML to display: generatedHtml > currentStorefront.html > MOCK_BAKERY_HTML
-  const displayHtml = useMemo(() => {
+  const rawHtml = useMemo(() => {
     if (generatedHtml) return generatedHtml;
     if (currentStorefront?.html) return currentStorefront.html;
     return MOCK_BAKERY_HTML;
   }, [generatedHtml, currentStorefront?.html]);
+
+  // Apply section visibility and ordering to the HTML
+  const displayHtml = useMemo(() => {
+    const visibleSections = sections.filter(s => s.visible);
+    const hiddenTypes = sections.filter(s => !s.visible).map(s => s.type);
+    // Section order for reordering: map section types to their desired order
+    const orderedTypes = sections.filter(s => s.visible).map(s => s.type);
+
+    // Nothing hidden — return raw HTML
+    if (hiddenTypes.length === 0 && orderedTypes.every((t, i) => {
+    const defaults = MOCK_SECTIONS.map(s => s.type);
+    return t === defaults[i];
+  })) return rawHtml;
+
+    // Parse HTML and manipulate DOM sections
+    if (typeof document === 'undefined') return rawHtml;
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(rawHtml, 'text/html');
+      const body = doc.body;
+      if (!body) return rawHtml;
+
+      // 1. Hide sections: add display:none to matching CSS-class sections
+      if (hiddenTypes.length > 0) {
+        const hideSelectors = hiddenTypes
+          .map(type => `section.${type}, section.${type}-section, div.${type}-section, [data-section="${type}"]`)
+          .join(', ');
+        const hiddenEls = doc.querySelectorAll(hideSelectors);
+        hiddenEls.forEach(el => {
+          el.setAttribute('data-storecraft-hidden', 'true');
+          el.style.display = 'none';
+        });
+      }
+
+      // 2. Reorder: collect visible section elements, sort them to match orderedTypes
+      if (orderedTypes.length > 0) {
+        const sectionElements: { el: Element; type: string; index: number }[] = [];
+        for (const type of orderedTypes) {
+          const sel = `section.${type}, section.${type}-section, div.${type}-section, [data-section="${type}"]`;
+          const els = body.querySelectorAll(sel);
+          els.forEach(el => {
+            if (el.getAttribute('data-storecraft-hidden') !== 'true') {
+              sectionElements.push({ el, type, index: orderedTypes.indexOf(type) });
+            }
+          });
+        }
+
+        // If we found section elements matching our types, reorder them
+        if (sectionElements.length > 1) {
+          sectionElements.sort((a, b) => a.index - b.index);
+          sectionElements.forEach(({ el }) => {
+            body.appendChild(el); // append in order = reorder
+          });
+        }
+      }
+
+      // Serialize back
+      const serializer = new XMLSerializer();
+      let result = '<!DOCTYPE html>\n' + serializer.serializeToString(doc);
+      return result;
+    } catch {
+      return rawHtml;
+    }
+  }, [rawHtml, sections]);
 
   const isAiGenerated = useMemo(() => {
     return !!generatedHtml || (currentStorefront?.html && currentStorefront.html !== MOCK_BAKERY_HTML);
@@ -1210,23 +1272,6 @@ export function PreviewView() {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-3 px-6 py-3 border-b border-border bg-card/50 backdrop-blur-sm"
           >
-            {/* Edit Mode Toggle */}
-            <div className="flex items-center gap-2 mr-auto">
-              <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-                {previewMode === 'preview' ? 'Preview' : 'Edit'} Mode
-              </span>
-              <Switch
-                checked={previewMode === 'edit'}
-                onCheckedChange={(checked) =>
-                  setPreviewMode(checked ? 'edit' : 'preview')
-                }
-              />
-              <Pencil className={cn(
-                'h-3.5 w-3.5',
-                previewMode === 'edit' ? 'text-violet-400' : 'text-muted-foreground'
-              )} />
-            </div>
-
             {/* Action Buttons */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1381,8 +1426,8 @@ export function PreviewView() {
                       <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-1 text-xs text-muted-foreground">
                         <Globe className="h-3 w-3" />
                         {currentStorefront.businessName
-                          ? `${currentStorefront.businessName.toLowerCase().replace(/\s+/g, '')}.com`
-                          : 'sweetdreamsbakery.com'}
+                          ? `${currentStorefront.businessName.toLowerCase().replace(/\s+/g, '-')}.storecraft.app`
+                          : 'storecraft.app'}
                       </div>
                     </div>
                   </div>
@@ -1392,7 +1437,7 @@ export function PreviewView() {
               {/* Sandboxed iframe */}
               <div
                 className={cn(
-                  'bg-white rounded-xl overflow-hidden shadow-2xl shadow-black/20',
+                  'relative bg-white rounded-xl overflow-hidden shadow-2xl shadow-black/20',
                   previewDevice !== 'desktop' ? 'rounded-t-none border border-t-0 border-border' : 'border border-border'
                 )}
               >
@@ -1483,6 +1528,7 @@ export function PreviewView() {
                     variant="outline"
                     size="sm"
                     className="w-full gap-2 text-xs"
+                    onClick={() => setSections(prev => prev.map(s => ({ ...s, visible: true })))}
                   >
                     <Eye className="h-3.5 w-3.5" />
                     Show All Sections
