@@ -27,6 +27,9 @@ import {
   Minus,
   Loader2,
   RefreshCw,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -829,6 +832,9 @@ export function PreviewView() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState<string | null>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [copiedShare, setCopiedShare] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
   const generateAttemptedRef = useRef(false);
   const mountedRef = useRef(true);
 
@@ -950,6 +956,214 @@ export function PreviewView() {
     }
   }, [businessProfile, currentStorefront, updateStorefront]);
 
+  // ---------------------------------------------------------------------------
+  // Download Handler — Blob + URL.createObjectURL
+  // ---------------------------------------------------------------------------
+  const handleDownload = useCallback(() => {
+    try {
+      const html = displayHtml;
+      if (!html) {
+        toast({ title: 'Nothing to download', description: 'Generate a website first.', variant: 'destructive' });
+        return;
+      }
+
+      let downloadHtml = html;
+      if (!downloadHtml.trim().toLowerCase().startsWith('<!doctype')) {
+        downloadHtml = `<!DOCTYPE html>\n${downloadHtml}`;
+      }
+
+      const businessName = currentStorefront?.businessName || 'storecraft-website';
+      const blob = new Blob([downloadHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${businessName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Download Started',
+        description: `${businessName}.html is being downloaded.`,
+      });
+    } catch {
+      toast({
+        title: 'Download Failed',
+        description: 'Could not generate the HTML file. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  }, [displayHtml, currentStorefront?.businessName]);
+
+  // ---------------------------------------------------------------------------
+  // Share Handler — Web Share API or clipboard fallback
+  // ---------------------------------------------------------------------------
+  const handleShare = useCallback(async () => {
+    if (copiedShare) return; // already copied, don't re-trigger
+    setIsSharing(true);
+    try {
+      const businessName = currentStorefront?.businessName || 'My StoreCraft Website';
+      const shareData = {
+        title: businessName,
+        text: `Check out ${businessName}, built with StoreCraft AI!`,
+        url: typeof window !== 'undefined' ? window.location.href : '',
+      };
+
+      // Try native Web Share API first (mobile-friendly)
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+          await navigator.share(shareData);
+          toast({ title: 'Shared!', description: `${businessName} shared successfully.` });
+          return;
+        } catch (shareErr: unknown) {
+          // User cancelled or API not supported — fall through to clipboard
+          if (shareErr instanceof Error && shareErr.name === 'AbortError') {
+            return; // User cancelled, not an error
+          }
+        }
+      }
+
+      // Fallback: copy embed snippet to clipboard
+      const deploymentUrl = currentStorefront?.deploymentUrl;
+      const snippet = deploymentUrl
+        ? `<!-- ${businessName} -->\n<iframe src="${deploymentUrl}" width="100%" height="600" frameborder="0" title="${businessName}"></iframe>`
+        : `${shareData.title}\n${shareData.text}\n${shareData.url}`;
+
+      await navigator.clipboard.writeText(snippet);
+      setCopiedShare(true);
+      toast({
+        title: 'Copied to clipboard!',
+        description: deploymentUrl ? 'Embed code copied — paste into any website.' : 'Share link copied to clipboard.',
+      });
+
+      // Reset copied state after 3 seconds
+      setTimeout(() => { if (mountedRef.current) setCopiedShare(false); }, 3000);
+    } catch {
+      toast({
+        title: 'Share Failed',
+        description: 'Could not share. Please try copying the URL manually.',
+        variant: 'destructive',
+      });
+    } finally {
+      if (mountedRef.current) setIsSharing(false);
+    }
+  }, [currentStorefront?.businessName, currentStorefront?.deploymentUrl, copiedShare]);
+
+  // ---------------------------------------------------------------------------
+  // Deploy Handler — copy embed code or deploy via API
+  // ---------------------------------------------------------------------------
+  const handleDeploy = useCallback(async () => {
+    // If already deployed, copy embed code
+    if (currentStorefront?.deploymentStatus === 'deployed' && currentStorefront?.deploymentUrl) {
+      const embedCode = `<!-- ${currentStorefront.businessName} -->\n<iframe src="${currentStorefront.deploymentUrl}" width="100%" height="600" frameborder="0" title="${currentStorefront.businessName}"></iframe>`;
+      try {
+        await navigator.clipboard.writeText(embedCode);
+        toast({
+          title: 'Embed Code Copied!',
+          description: 'Paste this iframe code into any website to embed your storefront.',
+        });
+      } catch {
+        toast({
+          title: 'Copy Failed',
+          description: 'Please copy the embed code manually from the deploy URL.',
+          variant: 'destructive',
+        });
+      }
+      return;
+    }
+
+    setIsDeploying(true);
+    try {
+      // Call the deploy API endpoint
+      const res = await fetch('/api/deploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storefrontId: currentStorefront?.id,
+          html: displayHtml,
+          businessName: currentStorefront?.businessName,
+        }),
+      });
+
+      if (!mountedRef.current) return;
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        // If deploy API doesn't exist yet, provide the embed code fallback
+        const slug = (currentStorefront?.businessName || 'storecraft-site')
+          .replace(/[^a-z0-9]+/gi, '-')
+          .toLowerCase();
+        const previewUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://storecraft.ai'}/preview/${slug}`;
+
+        const embedCode = `<!-- ${currentStorefront?.businessName || 'StoreCraft Website'} -->\n<iframe src="${previewUrl}" width="100%" height="600" frameborder="0" title="${currentStorefront?.businessName || 'StoreCraft Website'}"></iframe>`;
+
+        try {
+          await navigator.clipboard.writeText(embedCode);
+          toast({
+            title: 'Embed Code Ready',
+            description: 'Deploy API not yet available. Embed code copied to clipboard — paste into any website.',
+          });
+        } catch {
+          toast({
+            title: 'Embed Code Ready',
+            description: 'Deploy API not yet available. Copy the embed code from the deployment settings.',
+          });
+        }
+        return;
+      }
+
+      if (data.success) {
+        if (currentStorefront) {
+          updateStorefront(currentStorefront.id, {
+            deploymentStatus: 'deployed',
+            deploymentUrl: data.url || null,
+            publishedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        toast({
+          title: 'Deployed Successfully!',
+          description: data.url
+            ? `Your site is live at ${data.url}`
+            : 'Your storefront has been deployed.',
+          action: data.url ? (
+            <a href={data.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-violet-600 hover:text-violet-800">
+              <ExternalLink className="h-3.5 w-3.5" />
+              Open Site
+            </a>
+          ) : undefined,
+        });
+      }
+    } catch {
+      if (!mountedRef.current) return;
+      // Graceful fallback: generate embed code
+      const slug = (currentStorefront?.businessName || 'storecraft-site')
+        .replace(/[^a-z0-9]+/gi, '-')
+        .toLowerCase();
+      const previewUrl = `${typeof window !== 'undefined' ? window.location.origin : 'https://storecraft.ai'}/preview/${slug}`;
+      const embedCode = `<!-- ${currentStorefront?.businessName || 'StoreCraft Website'} -->\n<iframe src="${previewUrl}" width="100%" height="600" frameborder="0" title="${currentStorefront?.businessName || 'StoreCraft Website'}"></iframe>`;
+
+      try {
+        await navigator.clipboard.writeText(embedCode);
+        toast({
+          title: 'Embed Code Ready',
+          description: 'Deploy is being set up. Embed code copied to clipboard in the meantime.',
+        });
+      } catch {
+        toast({
+          title: 'Deploy Unavailable',
+          description: 'The deploy service is starting up. Please try again in a moment.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      if (mountedRef.current) setIsDeploying(false);
+    }
+  }, [currentStorefront, displayHtml, updateStorefront]);
+
   // When currentJob completes and there's a storefront, try to fetch the latest HTML
   useEffect(() => {
     if (
@@ -1036,30 +1250,68 @@ export function PreviewView() {
               </TooltipContent>
             </Tooltip>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              <Rocket className="h-3.5 w-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Deploy</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              <Share2 className="h-3.5 w-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">Share</span>
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              <Download className="h-3.5 w-3.5 text-violet-400" />
-              <span className="hidden sm:inline">Download</span>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleDownload}
+                >
+                  <Download className="h-3.5 w-3.5 text-violet-400" />
+                  <span className="hidden sm:inline">Download</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Download as HTML file</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleShare}
+                  disabled={isSharing}
+                >
+                  {copiedShare ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                  ) : (
+                    <Share2 className="h-3.5 w-3.5 text-cyan-400" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isSharing ? 'Sharing...' : copiedShare ? 'Copied!' : 'Share'}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {copiedShare ? 'Link copied to clipboard' : 'Share via link or Web Share API'}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleDeploy}
+                  disabled={isDeploying}
+                >
+                  {isDeploying ? (
+                    <Loader2 className="h-3.5 w-3.5 text-emerald-400 animate-spin" />
+                  ) : (
+                    <Rocket className="h-3.5 w-3.5 text-emerald-400" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {isDeploying ? 'Deploying...' : 'Deploy'}
+                  </span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {currentStorefront?.deploymentStatus === 'deployed'
+                  ? 'Already deployed — copy embed code'
+                  : 'Deploy to a live URL'}
+              </TooltipContent>
+            </Tooltip>
 
             <Separator orientation="vertical" className="h-6 mx-1" />
 

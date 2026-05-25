@@ -3,7 +3,7 @@
 # =============================================================================
 # Usage: docker-compose up --build
 # =============================================================================
-# Architecture: PostgreSQL 16 + Redis 7 + BullMQ Queues
+# Architecture: Next.js + PostgreSQL 16 + Redis 7 + BullMQ + WebSocket Gateway
 # =============================================================================
 
 version: "3.8"
@@ -88,6 +88,10 @@ services:
         condition: service_healthy
       generation-service:
         condition: service_healthy
+      ws-gateway:
+        condition: service_healthy
+      worker-service:
+        condition: service_healthy
     networks:
       - storecraft-network
     healthcheck:
@@ -98,7 +102,7 @@ services:
       start_period: 15s
 
   # ---------------------------------------------------------------------------
-  # Generation Service (WebSocket Pipeline Orchestrator)
+  # Generation Service (Website Generation Pipeline)
   # ---------------------------------------------------------------------------
   generation-service:
     build:
@@ -128,6 +132,75 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
+  # WebSocket Gateway (Real-time communication)
+  # ---------------------------------------------------------------------------
+  # Provides: heartbeat recovery, reconnection guarantees, backpressure,
+  # message replay, JWT auth, rate protection, namespace isolation
+  # Namespaces: /generation, /chat, /admin, /monitoring
+  # ---------------------------------------------------------------------------
+  ws-gateway:
+    build:
+      context: .
+      dockerfile: mini-services/ws-gateway/Dockerfile
+    container_name: storecraft-ws-gateway
+    restart: unless-stopped
+    ports:
+      - "3005:3005"
+    environment:
+      - NODE_ENV=production
+      - WS_GATEWAY_PORT=3005
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - storecraft-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Worker Service (BullMQ Background Job Processors)
+  # ---------------------------------------------------------------------------
+  # Processes jobs from 5 BullMQ queues:
+  # - generation: Website generation pipeline (LLM heavy, 5min timeout)
+  # - analytics: Analytics event ingestion (30s timeout)
+  # - pipeline-logs: Pipeline stage log persistence (10s timeout)
+  # - cleanup: Data maintenance and expired record removal (60s timeout)
+  # - notifications: Email/notification delivery (60s timeout)
+  # ---------------------------------------------------------------------------
+  worker-service:
+    build:
+      context: .
+      dockerfile: mini-services/worker-service/Dockerfile
+    container_name: storecraft-worker
+    restart: unless-stopped
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=production
+      - WORKER_PORT=3004
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-3}
+      - DATABASE_URL=postgresql://storecraft:${DB_PASSWORD:-storecraft_prod_password}@postgres:5432/storecraft?connection_limit=5&pool_timeout=30
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - storecraft-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
   # Nginx Reverse Proxy (Production)
   # ---------------------------------------------------------------------------
   nginx:
@@ -142,6 +215,7 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       - app
+      - ws-gateway
     networks:
       - storecraft-network
 

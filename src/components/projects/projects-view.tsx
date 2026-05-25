@@ -885,7 +885,7 @@ export function ProjectsView() {
 
   const handleDeploy = (storefront: Storefront) => {
     setCurrentStorefront(storefront);
-    // Could navigate to deploy view
+    setCurrentView('preview');
   };
 
   const handleDelete = async (storefront: Storefront) => {

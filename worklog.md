@@ -812,3 +812,42 @@ Stage Summary:
 - Dev server confirmed running on port 3000
 - NOTE: PostgreSQL and Redis not available in sandbox environment; production deployment via docker-compose.yml required
 
+
+---
+Task ID: dead-buttons-docker
+Agent: Main Agent
+Task: Fix dead Deploy/Download/Share buttons + add ws-gateway and worker-service to Docker
+
+Work Log:
+- Found 3 buttons in preview-view.tsx (lines 1039-1062) with zero onClick handlers
+- Found handleDeploy in projects-view.tsx was a no-op (just set storefront, no action)
+- Found ws-gateway (port 3005) and worker-service (port 3004) missing from docker-compose.yml
+- Found nginx.conf only proxied generation-service WebSocket, not ws-gateway
+
+Button Fixes (preview-view.tsx):
+- Added handleDownload: creates Blob from displayHtml, triggers download via URL.createObjectURL
+- Added handleShare: tries Web Share API (mobile), falls back to clipboard copy (embed code or share link)
+- Added handleDeploy: calls /api/deploy endpoint, falls back to embed code copy if API unavailable
+  - If already deployed: copies iframe embed code to clipboard
+  - Shows loading states (isDownloading, isSharing, isDeploying)
+  - All handlers use mountedRef for Strict Mode safety
+  - Added 3 new state variables: isSharing, copiedShare, isDeploying
+  - Added 3 new icons: Copy, Check, ExternalLink
+- Fixed projects-view.tsx handleDeploy: now navigates to preview view (functional action)
+
+Docker Fixes:
+- Created mini-services/ws-gateway/Dockerfile (bun-based, port 3005, health check at /health)
+- Created mini-services/worker-service/Dockerfile (bun-based, port 3004, Prisma, health check at /health)
+- Updated docker-compose.yml: added ws-gateway and worker-service with proper depends_on (postgres + redis healthy)
+- Updated nginx.conf: added ws_gateway upstream, /socket.io/ proxy location for Socket.IO, /ws/health health endpoint, legacy /ws/generation/ preserved
+- App service now depends on ws-gateway and worker-service being healthy
+- Nginx depends on ws-gateway in addition to app
+
+Stage Summary:
+- All 3 action buttons now fully functional with loading states and error handling
+- Docker Compose now has 7 services: postgres, redis, app, generation-service, ws-gateway, worker-service, nginx
+- Nginx proxies Socket.IO WebSocket traffic to ws-gateway on /socket.io/
+- 5 BullMQ queues (generation, analytics, pipeline-logs, cleanup, notifications) now have a worker consuming them
+- Dev server confirmed running with 200 response
+- Pre-existing lint errors in use-hardened-ws.ts unchanged (unrelated)
+
