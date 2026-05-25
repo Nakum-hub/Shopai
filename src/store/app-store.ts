@@ -15,6 +15,7 @@ import type {
   BusinessCategory,
   DesignComponent,
   DesignTheme,
+  DesignBlock,
 } from '@/lib/types';
 
 // =============================================================================
@@ -89,6 +90,14 @@ interface AppState {
   setSelectedDesignComponent: (component: DesignComponent | null) => void;
   selectedDesignTheme: DesignTheme | null;
   setSelectedDesignTheme: (theme: DesignTheme | null) => void;
+
+  // Block composition state (for modular template system)
+  selectedBlocks: DesignBlock[];
+  setSelectedBlocks: (blocks: DesignBlock[]) => void;
+  addBlock: (block: DesignBlock) => void;
+  removeBlock: (blockId: string) => void;
+  reorderBlocks: (fromIndex: number, toIndex: number) => void;
+  clearBlocks: () => void;
 }
 
 // =============================================================================
@@ -262,4 +271,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedDesignComponent: (component) => set({ selectedDesignComponent: component }),
   selectedDesignTheme: null,
   setSelectedDesignTheme: (theme) => set({ selectedDesignTheme: theme }),
+
+  // Block composition state (for modular template system)
+  selectedBlocks: [],
+  setSelectedBlocks: (blocks) => set({ selectedBlocks: blocks }),
+  addBlock: (block) =>
+    set((state) => ({ selectedBlocks: [...state.selectedBlocks, block] })),
+  removeBlock: (blockId) =>
+    set((state) => ({
+      selectedBlocks: state.selectedBlocks.filter((b) => b.id !== blockId),
+    })),
+  reorderBlocks: (fromIndex, toIndex) =>
+    set((state) => {
+      const blocks = [...state.selectedBlocks];
+      const [moved] = blocks.splice(fromIndex, 1);
+      blocks.splice(toIndex, 0, moved);
+      return { selectedBlocks: blocks };
+    }),
+  clearBlocks: () => set({ selectedBlocks: [] }),
 }));

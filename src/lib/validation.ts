@@ -78,15 +78,28 @@ export const extractProfileSchema = z.object({
 });
 
 // =============================================================================
+// Design Block Validation
+// =============================================================================
+
+export const designBlockSchema = z.object({
+  id: z.string().max(100),
+  type: z.string().max(50),
+  name: z.string().max(200),
+  variant: z.string().max(100),
+  description: z.string().max(1000),
+});
+
+// =============================================================================
 // Generate Website Validation
 // =============================================================================
 
 export const generateWebsiteSchema = z.object({
   businessProfile: businessProfileSchema.optional(),
   prompt: z.string().max(5000).optional(),
+  blocks: z.array(designBlockSchema).max(20).optional(),
 }).refine(
-  (data) => data.businessProfile || data.prompt,
-  { message: 'Either businessProfile or prompt is required' }
+  (data) => data.businessProfile || data.prompt || (data.blocks && data.blocks.length > 0),
+  { message: 'Either businessProfile, prompt, or blocks is required' }
 );
 
 // =============================================================================

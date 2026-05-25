@@ -952,3 +952,45 @@ Stage Summary:
 - Section toggle/reorder now works for both mock HTML and AI-generated HTML via heuristic keyword detection
 - All 6 previously reported UX defects fixed: Deploy/Share/Download buttons, section toggle/reorder, browser chrome URL
 - Projects view enhanced with Share/Download actions and smarter Deploy behavior
+---
+Task ID: 10
+Agent: Main Agent
+Task: PRIORITY 3 — Template System Evolution: Modular Design Blocks
+
+Work Log:
+- Created src/data/design-blocks.ts (1,401 lines): 92 design blocks across 13 section types
+  - Hero(15), Testimonials(12), Footer(9), Products(8), Services(8), About(6), FAQ(5), Features(5), CTA(5), Contact(5), Gallery(5), Team(5), Pricing(4)
+  - Each block has: id, type, name, description, variant, preview gradient, recommendedFor, style, keywords, popular
+  - Helper functions: getBlocksByType, getRecommendedBlocks, getDefaultComposition, searchBlocks, getBlockTypeCounts
+  - 11 curated default compositions (one per business category, 6-8 blocks each)
+- Updated src/lib/types.ts: Added DesignBlock and BlockComposition interfaces, 'blocks' to ViewType
+- Updated src/store/app-store.ts: Added selectedBlocks state with addBlock, removeBlock, reorderBlocks, clearBlocks, setSelectedBlocks
+- Created src/components/blocks/blocks-view.tsx (815 lines):
+  - AI Auto-Compose: category selector + instant block composition
+  - Two-panel layout: Block Library grid (left) + Composition sidebar (right)
+  - 14 category filter pills with block counts
+  - Block cards with gradient previews, style badges, add/remove toggle
+  - Composition panel: drag reorder, clear all, generate button
+  - Combination math display ("1 in X million unique combinations")
+  - Responsive: stacks on mobile, side-by-side on desktop
+- Updated src/app/api/generate/website/route.ts:
+  - Accepts optional `blocks` array in POST body (up to 20 blocks)
+  - When blocks provided, generates structured prompt with section order, variant descriptions, data-section requirements
+  - Full backward compatibility: without blocks, identical to original behavior
+- Updated src/lib/validation.ts: Added designBlockSchema, updated generateWebsiteSchema
+- Updated src/app/page.tsx: Added BlocksView to view components map
+- Updated src/components/layout/app-sidebar.tsx: Added "Design Blocks" nav item with "NEW" badge
+- Updated src/components/builder/builder-view.tsx:
+  - New useEffect consumes selectedBlocks from store (one-shot, same pattern as selectedTemplate)
+  - Infers business category and dominant style from block composition
+  - Creates BusinessProfile with block types as features
+  - Generation payload includes blockComposition array
+- Verification: ESLint 0 errors ✅, dev server running ✅
+
+Stage Summary:
+- COMPLETE modular design block system replacing static template paradigm
+- 92 blocks across 13 section types = millions of unique page combinations
+- Full UI: browse, filter, search, auto-compose, manually compose, reorder
+- AI-powered assembly: blocks flow into LLM prompt for guided HTML generation
+- Backward compatible: existing 60 templates + traditional generation still work
+- Combination math: 15 heroes × 12 testimonials × 9 footers × ... = exponential uniqueness

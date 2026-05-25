@@ -14,6 +14,8 @@ import type {
   GenerationLog,
   BusinessCategory,
   Storefront,
+  BrandStyle,
+  DesignBlock,
 } from '@/lib/types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -266,6 +268,8 @@ function VoiceInputSection() {
     setSelectedDesignComponent,
     selectedDesignTheme,
     setSelectedDesignTheme,
+    selectedBlocks,
+    setSelectedBlocks,
   } = useAppStore();
 
   const [textInput, setTextInput] = useState('');
@@ -347,6 +351,7 @@ function VoiceInputSection() {
   const { toast: showToast } = useToast();
   const sessionIdRef = useRef<string>(`builder-${Date.now()}`);
   const [activeQuickReplies, setActiveQuickReplies] = useState<string[]>([]);
+  const processedBlockCompositionRef = useRef<string>('');
 
   // --- Real voice recording refs & state ---
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -399,6 +404,58 @@ function VoiceInputSection() {
       setSelectedTemplate(null); // consume
     }
   }, [selectedTemplate, setBusinessProfile, addChatMessage, setSimStage, setSelectedTemplate]);
+
+  // When blocks are selected (from the Design Blocks view), create a business profile from them
+  useEffect(() => {
+    if (selectedBlocks.length > 0) {
+      // Check if we already processed this composition
+      const blockIds = selectedBlocks.map(b => b.id).join(',');
+      if (processedBlockCompositionRef.current === blockIds) return;
+      processedBlockCompositionRef.current = blockIds;
+
+      // Infer category from the first block's recommendations or default to 'other'
+      const category = selectedBlocks[0]?.recommendedFor?.[0] || 'other' as BusinessCategory;
+
+      // Infer style from most common block style
+      const styleCounts: Record<string, number> = {};
+      selectedBlocks.forEach(b => {
+        styleCounts[b.style] = (styleCounts[b.style] || 0) + 1;
+      });
+      const dominantStyle = Object.entries(styleCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'modern';
+
+      const styleMap: Record<string, BrandStyle> = {
+        modern: { primaryColor: '#7c3aed', secondaryColor: '#06b6d4', fontFamily: 'Inter', theme: 'modern', mood: 'sleek' },
+        classic: { primaryColor: '#92400e', secondaryColor: '#d97706', fontFamily: 'Playfair Display', theme: 'classic', mood: 'warm' },
+        minimal: { primaryColor: '#18181b', secondaryColor: '#71717a', fontFamily: 'Inter', theme: 'minimal', mood: 'clean' },
+        bold: { primaryColor: '#dc2626', secondaryColor: '#f97316', fontFamily: 'Space Grotesk', theme: 'bold', mood: 'energetic' },
+        elegant: { primaryColor: '#1c1917', secondaryColor: '#c9a96e', fontFamily: 'Cormorant Garamond', theme: 'elegant', mood: 'refined' },
+      };
+
+      const profile: BusinessProfile = {
+        name: '',
+        category,
+        description: '',
+        location: '',
+        phone: '',
+        email: '',
+        hours: '',
+        products: [],
+        services: [],
+        style: styleMap[dominantStyle] || styleMap.modern,
+        features: selectedBlocks.map(b => b.type),
+      };
+
+      setBusinessProfile(profile);
+      addChatMessage({
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: `I've prepared a page composition with ${selectedBlocks.length} design blocks: ${selectedBlocks.map(b => b.name).join(', ')}. Fill in your business details in the chat, or click "Generate Website" to start building!`,
+        timestamp: Date.now(),
+      });
+      setSimStage('ready');
+      setSelectedBlocks([]); // consume (one-shot, like selectedTemplate)
+    }
+  }, [selectedBlocks, setBusinessProfile, addChatMessage, setSimStage, setSelectedBlocks]);
 
   useEffect(() => {
     // When a design component is selected from the Design Library
@@ -837,7 +894,21 @@ function VoiceInputSection() {
     //   - Server shutdown handling
     //   - Connection health monitoring & metrics
     //   - Message replay on reconnect
-    wsStartGeneration(storefrontId, profileToUse, voiceTranscript);
+
+    // Include block composition in generation payload if available
+    const currentBlocks = useAppStore.getState().selectedBlocks;
+    const generationProfile: Record<string, unknown> = { ...profileToUse } as unknown as Record<string, unknown>;
+    if (currentBlocks.length > 0) {
+      generationProfile.blockComposition = currentBlocks.map(b => ({
+        id: b.id,
+        type: b.type,
+        name: b.name,
+        variant: b.variant,
+        description: b.description,
+      }));
+    }
+
+    wsStartGeneration(storefrontId, generationProfile, voiceTranscript);
   }, [voiceTranscript, businessProfile, setCurrentJob, wsStartGeneration]);
 
   const handleTextSubmit = async () => {

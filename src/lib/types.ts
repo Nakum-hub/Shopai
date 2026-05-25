@@ -3,7 +3,7 @@
 // =============================================================================
 
 // Navigation
-export type ViewType = 'builder' | 'preview' | 'projects' | 'templates' | 'design-library' | 'agents' | 'analytics' | 'settings';
+export type ViewType = 'builder' | 'preview' | 'projects' | 'templates' | 'blocks' | 'design-library' | 'agents' | 'analytics' | 'settings';
 
 // Storefront
 export type StorefrontStatus = 'draft' | 'generating' | 'ready' | 'published' | 'error';
@@ -261,4 +261,24 @@ export interface DesignTheme {
   style: DesignStyle;
   popular: boolean;
   useCount: number;
+}
+
+// Design Blocks (Modular Template System)
+export interface DesignBlock {
+  id: string;
+  type: StorefrontSection['type'];
+  name: string;
+  description: string;
+  variant: string;
+  preview: string;
+  recommendedFor: BusinessCategory[];
+  style: 'modern' | 'classic' | 'minimal' | 'bold' | 'elegant';
+  keywords: string[];
+  popular: boolean;
+}
+
+export interface BlockComposition {
+  blocks: DesignBlock[];
+  style: BrandStyle;
+  category: BusinessCategory;
 }
