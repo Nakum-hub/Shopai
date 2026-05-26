@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   keywords: ["voice-to-website", "AI website builder", "small business", "storefront", "bakery website", "salon website", "restaurant website", "boutique website", "AI website generator", "no-code website builder", "StoreCraft AI"],
   authors: [{ name: "StoreCraft AI" }],
   icons: {
-    icon: "/favicon.ico",
+    icon: "/favicon.svg",
   },
   openGraph: {
     title: "StoreCraft AI - Voice-to-Website Builder",

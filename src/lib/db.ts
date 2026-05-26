@@ -57,19 +57,19 @@ export async function dbHealthCheck(): Promise<{
   const start = Date.now();
 
   try {
-    const result = await db.$queryRawUnsafe<Array<{ version: string }>>(
+    const result = await db.$queryRawUnsafe(
       `SELECT version() as version`
-    );
+    ) as Array<{ version: string }>;
     const version = result[0]?.version || 'unknown';
 
-    const poolStats = await db.$queryRawUnsafe<Array<{ count: number }>>(
+    const poolStats = await db.$queryRawUnsafe(
       `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
-    );
+    ) as Array<{ count: number }>;
     const activeConnections = poolStats[0]?.count || 0;
 
-    const maxResult = await db.$queryRawUnsafe<Array<{ max_connections: number }>>(
+    const maxResult = await db.$queryRawUnsafe(
       `SHOW max_connections`
-    );
+    ) as Array<{ max_connections: number }>;
     const maxConnections = maxResult[0]?.max_connections || 100;
 
     const latencyMs = Date.now() - start;

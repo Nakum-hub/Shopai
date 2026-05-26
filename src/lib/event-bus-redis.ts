@@ -42,7 +42,7 @@ export interface RedisEventBusConfig {
 /** Health check result for the RedisEventBus */
 export interface RedisEventBusHealth {
   redis: boolean;
-  mode: 'redis' | 'in-memory' | 'hybrid';
+  mode: 'redis' | 'in-memory' | 'hybrid' | 'error';
   subscriberCount: number;
   eventCount: number;
   historySize: number;
@@ -91,7 +91,7 @@ class RedisEventBus {
   private publisher: Redis | null = null;
   private subscriber: Redis | null = null;
   private redisReady = false;
-  private _mode: 'redis' | 'in-memory' | 'hybrid' = 'in-memory';
+  private _mode: 'redis' | 'in-memory' | 'hybrid' | 'error' = 'in-memory';
 
   // Track event count for stats
   private publishedCount = 0;

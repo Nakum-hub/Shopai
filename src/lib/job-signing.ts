@@ -1,4 +1,4 @@
-'use server';
+
 
 // =============================================================================
 // Job Signing — BullMQ Job Integrity Verification

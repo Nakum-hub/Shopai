@@ -1,4 +1,4 @@
-'use server';
+
 
 // =============================================================================
 // StoreCraft AI — Core Security Infrastructure

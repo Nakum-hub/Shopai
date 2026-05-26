@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       const clientIp = ctx?.clientIp || 'unknown';
       const rl = rateLimit(`bi:${clientIp}`, 30, 60_000);
       if (!rl.allowed) {
-        return error(new RateLimitError('Too many requests'), rl.retryAfterMs);
+        return error(new RateLimitError('Too many requests', rl.retryAfterMs), timings.meta());
       }
 
       const storefront = await db.storefront.findUnique({

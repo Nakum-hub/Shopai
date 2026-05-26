@@ -44,7 +44,7 @@ export interface EventStoreEntry {
 // Event Bus Implementation
 // -----------------------------------------------------------------------------
 
-class EventBus {
+export class EventBus {
   private subscriptions = new Map<string, Subscription>();
   private eventStore: EventStoreEntry[] = [];
   private maxStoreSize: number;

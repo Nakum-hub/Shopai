@@ -50,7 +50,7 @@ const fadeInUp = {
     transition: {
       delay: i * 0.1,
       duration: 0.6,
-      ease: [0.22, 1, 0.36, 1],
+      ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
     },
   }),
 };
@@ -69,7 +69,7 @@ const scaleIn = {
   visible: {
     opacity: 1,
     scale: 1,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] },
   },
 };
 
@@ -809,7 +809,7 @@ function TemplatesSection() {
         {/* Browse All Button */}
         <motion.div variants={fadeInUp} className="text-center mt-10">
           <Button
-            onClick={() => signIn()}
+            onClick={authGetStarted}
             variant="outline"
             size="lg"
             className="border-zinc-700/50 bg-zinc-800/30 hover:bg-zinc-800/70 text-zinc-200 hover:text-zinc-100 rounded-xl px-8 h-11 backdrop-blur-sm group"
@@ -860,7 +860,7 @@ function CTASection() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
               <Button
-                onClick={() => signIn()}
+                onClick={authGetStarted}
                 size="lg"
                 className="bg-gradient-to-r from-violet-600 to-cyan-500 hover:from-violet-500 hover:to-cyan-400 text-white shadow-xl shadow-violet-500/25 rounded-xl px-8 h-12 text-base"
               >

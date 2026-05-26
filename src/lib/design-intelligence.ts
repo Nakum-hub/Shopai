@@ -108,7 +108,7 @@ export interface CTAProfile {
   /** Text on the secondary / ghost CTA button. */
   secondaryText: string;
   /** Where CTAs should be placed on the page. */
-  placement: ('hero' | 'about' | 'services' | 'pricing' | 'floating' | 'footer')[];
+  placement: ('hero' | 'about' | 'services' | 'products' | 'pricing' | 'hours' | 'contact' | 'gallery' | 'testimonials' | 'features' | 'faq' | 'floating' | 'footer')[];
 }
 
 /** Layout style preference. */

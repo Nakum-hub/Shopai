@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
       const clientIp = ctx?.clientIp || 'unknown';
       const rl = rateLimit(`analytics:${clientIp}`, 60, 60_000);
       if (!rl.allowed) {
-        return error(new RateLimitError('Too many requests'), rl.retryAfterMs);
+        return error(new RateLimitError('Too many requests', rl.retryAfterMs), timings.meta());
       }
 
       // Use cache for the expensive computation

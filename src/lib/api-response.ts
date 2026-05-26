@@ -24,7 +24,7 @@
  * ```
  */
 
-import { NextResponse, type ReadableStream } from 'next/server';
+import { NextResponse } from 'next/server';
 import { AppError, toResponse } from '@/lib/errors';
 import type { ErrorResponse } from '@/lib/errors';
 

@@ -896,7 +896,7 @@ export function PreviewView() {
       // Check if the HTML already has data-section attributes
       const hasDataSection = doc.querySelectorAll('[data-section]').length > 0;
       // Check if it uses CSS class-based sections (like MOCK_BAKERY_HTML)
-      const hasClassSections = Array.from(sectionKeywords.keys()).some(
+      const hasClassSections = Object.keys(sectionKeywords).some(
         type => doc.querySelectorAll(`section.${type}`).length > 0
       );
 
@@ -962,7 +962,7 @@ export function PreviewView() {
         const hiddenEls = doc.querySelectorAll(hideSelectors);
         hiddenEls.forEach(el => {
           el.setAttribute('data-storecraft-hidden', 'true');
-          el.style.display = 'none';
+          (el as HTMLElement).style.display = 'none';
         });
       }
 

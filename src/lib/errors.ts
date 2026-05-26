@@ -405,7 +405,7 @@ export function toLog(
     details: error.details,
     isOperational: error.isOperational,
     stack: error.stack,
-    cause: error.cause?.message,
+    cause: (error.cause as Error | undefined)?.message,
     requestId: context?.requestId,
     correlationId: error.correlationId,
     path: context?.path,
@@ -588,7 +588,7 @@ function formatZodError(error: unknown): { field: string; message: string }[] {
   const e = error as Record<string, unknown>;
   const issues = e.issues as Array<Record<string, unknown>>;
   return issues.slice(0, 10).map((issue) => ({
-    field: String(issue.path?.join('.') || 'root'),
+    field: String((issue.path as string[] | undefined)?.join('.') || 'root'),
     message: String(issue.message),
   }));
 }
