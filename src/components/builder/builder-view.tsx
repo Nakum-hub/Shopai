@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useGenerationWs } from '@/hooks/use-generation-ws';
 import { useAppStore } from '@/store/app-store';
+import { allTemplates as localTemplates } from '@/data/templates';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import type {
@@ -16,6 +17,7 @@ import type {
   Storefront,
   BrandStyle,
   DesignBlock,
+  Template,
 } from '@/lib/types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -511,6 +513,18 @@ function VoiceInputSection() {
 
   const hasStarted = chatMessages.length > 0 || simStage !== 'idle';
   const hasBusinessProfile = businessProfile !== null;
+
+  // Related templates — show alternatives from the same category
+  const relatedTemplates = React.useMemo(() => {
+    if (!businessProfile?.category) return [];
+    const cat = businessProfile.category;
+    // Get the name of the template we loaded (if any) to exclude it
+    const currentName = chatMessages.find(m => m.role === 'assistant' && m.content.includes('template'))?.content;
+    return localTemplates
+      .filter(t => t.category === cat)
+      .filter(t => !currentName || !currentName.includes(t.name))
+      .slice(0, 3);
+  }, [businessProfile?.category, chatMessages]);
   const allChatMessages = chatMessages;
 
   // --- Helper: map API business profile response to BusinessProfile type ---
@@ -1405,6 +1419,51 @@ function VoiceInputSection() {
               <Separator />
               <CardContent className="p-4 space-y-3">
                 <BusinessInfoCards profile={businessProfile!} />
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* Related Templates — alternatives from same category */}
+        {hasBusinessProfile && !isGenerating && simStage === 'ready' && relatedTemplates.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+          >
+            <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+              <CardHeader className="pb-3 px-4 pt-4">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-violet-400" />
+                  Try a Different Template
+                </CardTitle>
+              </CardHeader>
+              <Separator />
+              <CardContent className="p-3 space-y-2">
+                {relatedTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      setSelectedTemplate(t);
+                    }}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-lg border border-border/40 hover:border-violet-500/50 hover:bg-violet-500/5 transition-all group text-left"
+                  >
+                    <div className="shrink-0 h-10 w-10 rounded-lg bg-gradient-to-br flex items-center justify-center text-white text-xs font-bold"
+                      style={{ backgroundImage: `linear-gradient(135deg, ${t.style.primaryColor}, ${t.style.secondaryColor})` }}
+                    >
+                      {t.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground truncate group-hover:text-violet-300 transition-colors">
+                        {t.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {t.sections.length} sections · {t.style.theme} · {t.style.mood}
+                      </p>
+                    </div>
+                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-violet-400 transition-colors shrink-0" />
+                  </button>
+                ))}
               </CardContent>
             </Card>
           </motion.div>
