@@ -375,36 +375,302 @@ export function TemplatesView() {
     return result;
   }, [searchQuery, activeCategory, activeMood, activeSectionType, sortOption, templates, featuredTemplate?.id]);
 
-  // Fix 5: Live HTML preview
+  // Rich HTML preview — renders each section type as a professional website section
   const previewHtml = useMemo(() => {
     if (!selectedTemplate) return '';
     const t = selectedTemplate;
+    const pc = t.style.primaryColor;
+    const sc = t.style.secondaryColor;
+    const ff = t.style.fontFamily;
+    const isDark = t.style.theme === 'bold' || t.style.mood === 'luxury' || t.style.mood === 'sophisticated';
+    const bg = isDark ? '#0f0f0f' : '#ffffff';
+    const textMain = isDark ? '#f1f1f1' : '#1a1a1a';
+    const textMuted = isDark ? '#a0a0a0' : '#6b7280';
+    const cardBg = isDark ? '#1a1a1a' : '#f9fafb';
+    const borderCol = isDark ? '#2a2a2a' : '#e5e7eb';
+
+    // SVG icons as inline data URIs for each section
+    const icons: Record<string, string> = {
+      star: `<svg width="20" height="20" fill="${pc}" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`,
+      quote: `<svg width="32" height="32" fill="${pc}" opacity="0.3" viewBox="0 0 24 24"><path d="M6 17h3l2-4V7H5v6h3zm8 0h3l2-4V7h-6v6h3z"/></svg>`,
+      phone: `<svg width="18" height="18" fill="none" stroke="${pc}" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>`,
+      clock: `<svg width="18" height="18" fill="none" stroke="${pc}" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
+      check: `<svg width="16" height="16" fill="${pc}" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>`,
+    };
+
+    const sectionRenderers: Record<string, (s: typeof t.sections[0]) => string> = {
+      hero: (s) => `
+        <section style="background:linear-gradient(135deg,${pc},${sc});padding:80px 24px 72px;text-align:center;color:#fff;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2260%22 height=%2260%22><circle cx=%2230%22 cy=%2230%22 r=%221%22 fill=%22rgba(255,255,255,0.08)%22/></svg>');"></div>
+          <div style="position:relative;max-width:680px;margin:0 auto;">
+            <h1 style="font-size:2.6rem;font-weight:700;line-height:1.15;margin-bottom:16px;letter-spacing:-0.02em;">${s.title}</h1>
+            <p style="font-size:1.15rem;opacity:0.92;line-height:1.6;max-width:520px;margin:0 auto 28px;">${s.content}</p>
+            <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+              <a href="#" style="display:inline-block;padding:13px 32px;background:#fff;color:${pc};border-radius:8px;font-weight:600;font-size:0.95rem;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,0.15);">Get Started</a>
+              <a href="#" style="display:inline-block;padding:13px 32px;background:rgba(255,255,255,0.15);color:#fff;border-radius:8px;font-weight:600;font-size:0.95rem;text-decoration:none;border:1px solid rgba(255,255,255,0.3);backdrop-filter:blur(4px);">Learn More</a>
+            </div>
+          </div>
+        </section>`,
+
+      about: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:800px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;">
+            <div>
+              <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">About Us</p>
+              <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:16px;line-height:1.2;">${s.title}</h2>
+              <p style="color:${textMuted};line-height:1.7;font-size:0.95rem;">${s.content}</p>
+            </div>
+            <div style="background:linear-gradient(135deg,${pc}22,${sc}22);border-radius:16px;height:220px;display:flex;align-items:center;justify-content:center;">
+              <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,${pc},${sc});opacity:0.6;"></div>
+            </div>
+          </div>
+        </section>`,
+
+      products: (s) => `
+        <section style="padding:64px 24px;background:${cardBg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Our Products</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:8px;">${s.title}</h2>
+            <p style="color:${textMuted};margin-bottom:36px;max-width:500px;margin-left:auto;margin-right:auto;">${s.content}</p>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+              ${[1,2,3].map(i => `
+              <div style="background:${bg};border-radius:12px;overflow:hidden;border:1px solid ${borderCol};text-align:left;">
+                <div style="height:140px;background:linear-gradient(${120+i*30}deg,${pc}18,${sc}25);display:flex;align-items:center;justify-content:center;">
+                  <div style="width:48px;height:48px;border-radius:12px;background:${pc}30;"></div>
+                </div>
+                <div style="padding:16px;">
+                  <h3 style="font-size:0.95rem;font-weight:600;color:${textMain};margin-bottom:4px;">Product ${i}</h3>
+                  <p style="font-size:0.8rem;color:${textMuted};margin-bottom:10px;">Premium quality item</p>
+                  <span style="font-weight:700;color:${pc};font-size:1rem;">$${(19.99 * i).toFixed(2)}</span>
+                </div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      services: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Services</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+              ${['Consultation','Implementation','Support'].map((name, i) => `
+              <div style="padding:28px 20px;background:${cardBg};border-radius:12px;border:1px solid ${borderCol};text-align:center;">
+                <div style="width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,${pc},${sc});margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
+                  <div style="width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,0.4);"></div>
+                </div>
+                <h3 style="font-size:1rem;font-weight:600;color:${textMain};margin-bottom:6px;">${name}</h3>
+                <p style="font-size:0.8rem;color:${textMuted};line-height:1.5;">${s.content.split(',')[i] || 'Professional service tailored to your needs'}</p>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      gallery: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Gallery</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+              ${[0,1,2,3,4,5].map(i => `
+              <div style="aspect-ratio:1;border-radius:12px;background:linear-gradient(${i*60}deg,${pc}${15+i*5},${sc}${20+i*5});display:flex;align-items:center;justify-content:center;overflow:hidden;">
+                <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.15);backdrop-filter:blur(4px);"></div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      testimonials: (s) => `
+        <section style="padding:64px 24px;background:${cardBg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Testimonials</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;">
+              ${[{n:'Sarah M.',r:'Amazing quality and service!',t:'5.0'},{n:'James K.',r:'Best in the city, highly recommend.',t:'4.9'}].map(rev => `
+              <div style="background:${bg};border-radius:12px;padding:24px;text-align:left;border:1px solid ${borderCol};">
+                <div style="margin-bottom:12px;">${icons.quote}</div>
+                <p style="color:${textMain};font-size:0.9rem;line-height:1.6;margin-bottom:16px;font-style:italic;">"${rev.r}"</p>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,${pc},${sc});display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:0.8rem;">${rev.n[0]}</div>
+                  <div>
+                    <p style="font-weight:600;font-size:0.85rem;color:${textMain};">${rev.n}</p>
+                    <div style="display:flex;gap:2px;">${[1,2,3,4,5].map(() => icons.star).join('')}</div>
+                  </div>
+                </div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      contact: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:800px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:40px;">
+            <div>
+              <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Contact</p>
+              <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:16px;">${s.title}</h2>
+              <p style="color:${textMuted};margin-bottom:24px;line-height:1.6;font-size:0.9rem;">${s.content}</p>
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;align-items:center;gap:10px;">${icons.phone}<span style="color:${textMain};font-size:0.9rem;">+1 (555) 123-4567</span></div>
+                <div style="display:flex;align-items:center;gap:10px;">${icons.clock}<span style="color:${textMain};font-size:0.9rem;">Mon-Sat: 9AM - 8PM</span></div>
+              </div>
+            </div>
+            <div style="background:${cardBg};border-radius:12px;padding:24px;border:1px solid ${borderCol};">
+              <div style="margin-bottom:14px;"><label style="font-size:0.8rem;font-weight:600;color:${textMain};display:block;margin-bottom:6px;">Name</label><div style="height:40px;border-radius:8px;border:1px solid ${borderCol};background:${bg};"></div></div>
+              <div style="margin-bottom:14px;"><label style="font-size:0.8rem;font-weight:600;color:${textMain};display:block;margin-bottom:6px;">Email</label><div style="height:40px;border-radius:8px;border:1px solid ${borderCol};background:${bg};"></div></div>
+              <div style="margin-bottom:18px;"><label style="font-size:0.8rem;font-weight:600;color:${textMain};display:block;margin-bottom:6px;">Message</label><div style="height:80px;border-radius:8px;border:1px solid ${borderCol};background:${bg};"></div></div>
+              <div style="height:42px;border-radius:8px;background:linear-gradient(135deg,${pc},${sc});display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:0.9rem;cursor:pointer;">Send Message</div>
+            </div>
+          </div>
+        </section>`,
+
+      hours: (s) => `
+        <section style="padding:56px 24px;background:${cardBg};">
+          <div style="max-width:600px;margin:0 auto;text-align:center;">
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;">${icons.clock}<h2 style="font-size:1.5rem;font-weight:700;color:${textMain};">${s.title}</h2></div>
+            <p style="color:${textMuted};margin-bottom:24px;">${s.content}</p>
+            <div style="background:${bg};border-radius:12px;padding:20px;border:1px solid ${borderCol};">
+              ${['Mon - Fri: 8AM - 9PM','Saturday: 9AM - 8PM','Sunday: 10AM - 6PM'].map(h => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid ${borderCol};"><span style="color:${textMain};font-size:0.9rem;">${h.split(':')[0]}</span><span style="color:${pc};font-weight:600;font-size:0.9rem;">${h.split(':').slice(1).join(':')}</span></div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      team: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Our Team</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:24px;">
+              ${['Alex','Jordan','Sam'].map((n,i) => `
+              <div style="text-align:center;">
+                <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(${135+i*45}deg,${pc},${sc});margin:0 auto 14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.6rem;font-weight:700;">${n[0]}</div>
+                <h3 style="font-size:0.95rem;font-weight:600;color:${textMain};">${n}</h3>
+                <p style="font-size:0.8rem;color:${textMuted};">${['Founder','Manager','Specialist'][i]}</p>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      faq: (s) => `
+        <section style="padding:64px 24px;background:${cardBg};">
+          <div style="max-width:700px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">FAQ</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="text-align:left;display:flex;flex-direction:column;gap:12px;">
+              ${['What are your hours?','Do you offer delivery?','How do I place a custom order?'].map(q => `
+              <div style="background:${bg};border-radius:10px;padding:18px 20px;border:1px solid ${borderCol};">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                  <h3 style="font-size:0.9rem;font-weight:600;color:${textMain};">${q}</h3>
+                  <span style="color:${pc};font-size:1.2rem;font-weight:300;">+</span>
+                </div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      features: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Features</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;text-align:left;">
+              ${['Fast Delivery','Top Quality','24/7 Support','Best Prices'].map(f => `
+              <div style="display:flex;gap:14px;align-items:flex-start;padding:16px;border-radius:10px;background:${cardBg};border:1px solid ${borderCol};">
+                <div style="width:36px;height:36px;border-radius:8px;background:${pc}18;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${icons.check}</div>
+                <div>
+                  <h3 style="font-size:0.9rem;font-weight:600;color:${textMain};margin-bottom:4px;">${f}</h3>
+                  <p style="font-size:0.8rem;color:${textMuted};line-height:1.5;">We pride ourselves on delivering the best experience.</p>
+                </div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      pricing: (s) => `
+        <section style="padding:64px 24px;background:${cardBg};">
+          <div style="max-width:900px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Pricing</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+              ${[{n:'Basic',p:'$29',f:['3 items','Email support']},{n:'Pro',p:'$59',f:['10 items','Priority support','Custom branding']},{n:'Enterprise',p:'$99',f:['Unlimited','24/7 support','API access','Custom integrations']}].map((plan,i) => `
+              <div style="background:${i===1?`linear-gradient(135deg,${pc},${sc})`:bg};border-radius:14px;padding:28px 20px;border:1px solid ${i===1?'transparent':borderCol};color:${i===1?'#fff':textMain};${i===1?'transform:scale(1.04);box-shadow:0 8px 30px '+pc+'40;':''}">
+                <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:4px;">${plan.n}</h3>
+                <p style="font-size:2rem;font-weight:800;margin-bottom:16px;">${plan.p}<span style="font-size:0.85rem;font-weight:400;opacity:0.7;">/mo</span></p>
+                ${plan.f.map(f => `<p style="font-size:0.8rem;padding:6px 0;opacity:0.85;">✓ ${f}</p>`).join('')}
+                <div style="margin-top:18px;padding:10px;border-radius:8px;background:${i===1?'rgba(255,255,255,0.2)':pc+'15'};color:${i===1?'#fff':pc};font-weight:600;font-size:0.85rem;text-align:center;">Choose Plan</div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      cta: (s) => `
+        <section style="padding:56px 24px;background:linear-gradient(135deg,${pc},${sc});text-align:center;color:#fff;">
+          <div style="max-width:600px;margin:0 auto;">
+            <h2 style="font-size:1.8rem;font-weight:700;margin-bottom:12px;">${s.title}</h2>
+            <p style="opacity:0.9;margin-bottom:24px;font-size:0.95rem;">${s.content}</p>
+            <a href="#" style="display:inline-block;padding:13px 36px;background:#fff;color:${pc};border-radius:8px;font-weight:600;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,0.15);">Get Started Today</a>
+          </div>
+        </section>`,
+
+      events: (s) => `
+        <section style="padding:64px 24px;background:${bg};">
+          <div style="max-width:800px;margin:0 auto;text-align:center;">
+            <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Events</p>
+            <h2 style="font-size:1.8rem;font-weight:700;color:${textMain};margin-bottom:32px;">${s.title}</h2>
+            <div style="display:flex;flex-direction:column;gap:14px;text-align:left;">
+              ${['Grand Opening Celebration','Monthly Tasting Event','Holiday Special'].map((e,i) => `
+              <div style="display:flex;gap:16px;padding:18px;background:${cardBg};border-radius:12px;border:1px solid ${borderCol};align-items:center;">
+                <div style="width:52px;text-align:center;flex-shrink:0;"><span style="font-size:1.5rem;font-weight:800;color:${pc};">${15+i*7}</span><br><span style="font-size:0.7rem;color:${textMuted};text-transform:uppercase;">Jan</span></div>
+                <div><h3 style="font-size:0.9rem;font-weight:600;color:${textMain};">${e}</h3><p style="font-size:0.8rem;color:${textMuted};">Join us for a special experience</p></div>
+              </div>`).join('')}
+            </div>
+          </div>
+        </section>`,
+
+      map: (s) => `
+        <section style="padding:48px 24px;background:${cardBg};">
+          <div style="max-width:800px;margin:0 auto;text-align:center;">
+            <h2 style="font-size:1.5rem;font-weight:700;color:${textMain};margin-bottom:20px;">${s.title}</h2>
+            <div style="height:200px;border-radius:12px;background:linear-gradient(135deg,${pc}10,${sc}15);border:1px solid ${borderCol};display:flex;align-items:center;justify-content:center;">
+              <div style="text-align:center;"><div style="font-size:2rem;margin-bottom:8px;">📍</div><p style="color:${textMuted};font-size:0.85rem;">${s.content}</p></div>
+            </div>
+          </div>
+        </section>`,
+
+      footer: (s) => `
+        <footer style="padding:40px 24px 24px;background:${isDark ? '#080808' : '#111827'};color:rgba(255,255,255,0.7);">
+          <div style="max-width:800px;margin:0 auto;display:flex;justify-content:space-between;flex-wrap:wrap;gap:24px;">
+            <div><h3 style="color:#fff;font-weight:700;font-size:1.1rem;margin-bottom:10px;">${t.name}</h3><p style="font-size:0.8rem;max-width:200px;line-height:1.5;">${s.content}</p></div>
+            <div><h4 style="color:#fff;font-weight:600;font-size:0.85rem;margin-bottom:10px;">Quick Links</h4>${['Home','About','Contact'].map(l => `<p style="font-size:0.8rem;margin-bottom:6px;">${l}</p>`).join('')}</div>
+            <div><h4 style="color:#fff;font-weight:600;font-size:0.85rem;margin-bottom:10px;">Contact</h4><p style="font-size:0.8rem;margin-bottom:4px;">hello@example.com</p><p style="font-size:0.8rem;">+1 (555) 000-0000</p></div>
+          </div>
+          <div style="max-width:800px;margin:20px auto 0;padding-top:20px;border-top:1px solid rgba(255,255,255,0.1);text-align:center;font-size:0.75rem;">© ${new Date().getFullYear()} ${t.name}. All rights reserved.</div>
+        </footer>`,
+    };
+
+    const fallback = (s: typeof t.sections[0]) => `
+      <section style="padding:56px 24px;background:${bg};">
+        <div style="max-width:800px;margin:0 auto;">
+          <p style="color:${pc};font-weight:600;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">${s.type}</p>
+          <h2 style="font-size:1.5rem;font-weight:700;color:${textMain};margin-bottom:12px;">${s.title}</h2>
+          <p style="color:${textMuted};line-height:1.7;">${s.content}</p>
+        </div>
+      </section>`;
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(t.style.fontFamily)}:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=${encodeURIComponent(ff)}:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: '${t.style.fontFamily}', sans-serif; color: #333; }
-.hero { background: linear-gradient(135deg, ${t.style.primaryColor}, ${t.style.secondaryColor}); padding: 60px 20px; text-align: center; color: white; }
-.hero h1 { font-size: 2rem; margin-bottom: 8px; }
-.hero p { opacity: 0.9; font-size: 1.1rem; }
-.section { padding: 40px 20px; max-width: 800px; margin: 0 auto; }
-.section h2 { font-size: 1.4rem; margin-bottom: 12px; color: ${t.style.primaryColor}; }
-.section p { color: #666; line-height: 1.6; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-top: 16px; }
-.grid-item { background: #f8f8f8; border-radius: 8px; padding: 16px; }
-.grid-item h3 { font-size: 0.9rem; margin-bottom: 4px; }
-.grid-item p { font-size: 0.8rem; }
+body { font-family: '${ff}', system-ui, -apple-system, sans-serif; color: ${textMain}; background: ${bg}; -webkit-font-smoothing: antialiased; }
+a { text-decoration: none; }
+img { max-width: 100%; }
 </style>
 </head>
 <body>
-${t.sections.map((s) => {
-  if (s.type === 'hero') return `<div class="hero"><h1>${s.title}</h1><p>${s.content}</p></div>`;
-  return `<div class="section"><h2>${s.title}</h2><p>${s.content}</p></div>`;
-}).join('\n')}
+${t.sections.filter(s => s.visible !== false).map(s => (sectionRenderers[s.type] || fallback)(s)).join('\n')}
 </body>
 </html>`;
   }, [selectedTemplate]);
@@ -788,7 +1054,7 @@ ${t.sections.map((s) => {
       <Dialog open={!!selectedTemplate} onOpenChange={() => setSelectedTemplate(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           {selectedTemplate && (
-            <Tabs defaultValue="overview" className="w-full">
+            <Tabs defaultValue="preview" className="w-full">
               {/* Fix 5: Tab Switcher */}
               <TabsList className="mb-4">
                 <TabsTrigger value="overview">
@@ -966,7 +1232,7 @@ ${t.sections.map((s) => {
                     srcDoc={previewHtml}
                     sandbox="allow-scripts"
                     title={`${selectedTemplate.name} live preview`}
-                    className="w-full h-[500px] border-0"
+                    className="w-full h-[600px] border-0 bg-white"
                   />
                 </div>
               </TabsContent>
