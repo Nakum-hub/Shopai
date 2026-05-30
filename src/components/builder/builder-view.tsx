@@ -6,6 +6,7 @@ import { useGenerationWs } from '@/hooks/use-generation-ws';
 import { useAppStore } from '@/store/app-store';
 import { allTemplates as localTemplates } from '@/data/templates';
 import { cn } from '@/lib/utils';
+import ReactMarkdown from 'react-markdown';
 import { useToast } from '@/hooks/use-toast';
 import type {
   ChatMessage,
@@ -766,23 +767,8 @@ function VoiceInputSection() {
         );
       }
 
-      // Send one more automated follow-up after a delay
-      simTimerRef.current.push(
-        setTimeout(async () => {
-          if (!mountedRef.current) return;
-          const followUp = await callChatAPI(
-            'Tell me more about what you can help me with for my website.'
-          );
-          if (!followUp || !mountedRef.current) return;
-
-          addChatMessage({
-            id: `msg-${Date.now()}`,
-            role: 'assistant',
-            content: followUp.response,
-            timestamp: Date.now(),
-          });
-        }, 2500)
-      );
+      // NOTE: Auto follow-up removed — the user drives the conversation.
+      // The AI should only respond to explicit user input.
     },
     [addChatMessage, callChatAPI, setBusinessProfile]
   );
@@ -1308,7 +1294,15 @@ function VoiceInputSection() {
                               : 'bg-muted border border-border/50 rounded-bl-md text-foreground/90'
                           )}
                         >
-                          {msg.content}
+                          {msg.role === 'assistant' ? (
+                            <div className="prose prose-invert prose-sm max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>li]:my-0.5">
+                              <ReactMarkdown>
+                                {msg.content}
+                              </ReactMarkdown>
+                            </div>
+                          ) : (
+                            msg.content
+                          )}
                         </div>
                         {msg.role === 'user' && (
                           <Avatar className="h-7 w-7 shrink-0 mt-0.5">

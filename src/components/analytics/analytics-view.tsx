@@ -472,14 +472,17 @@ export function AnalyticsView() {
       if (!insightsRes.ok) throw new Error(`Insights failed (status ${insightsRes.status})`);
 
       const analyticsJson = await analyticsRes.json();
-      const healthJson: BIHealthResponse = await healthRes.json();
-      const insightsJson: BIInsightsResponse = await insightsRes.json();
+      const healthJsonRaw = await healthRes.json();
+      const insightsJsonRaw = await insightsRes.json();
 
-      if (analyticsJson.analytics) {
-        setAnalytics(analyticsJson.analytics);
+      if (analyticsJson.data?.analytics) {
+        setAnalytics(analyticsJson.data.analytics);
       }
-      setHealthData(healthJson);
-      setInsightsData(insightsJson);
+      // API wraps in success envelope: { success, data: { healthScore, ... } }
+      const healthPayload: BIHealthResponse = healthJsonRaw.data ?? healthJsonRaw;
+      const insightsPayload: BIInsightsResponse = insightsJsonRaw.data ?? insightsJsonRaw;
+      setHealthData(healthPayload);
+      setInsightsData(insightsPayload);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
       console.error('[ANALYTICS_VIEW] Failed to fetch data:', err);

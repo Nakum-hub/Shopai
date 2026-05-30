@@ -57,20 +57,36 @@ export async function dbHealthCheck(): Promise<{
   const start = Date.now();
 
   try {
-    const result = await db.$queryRawUnsafe(
-      `SELECT version() as version`
-    ) as Array<{ version: string }>;
-    const version = result[0]?.version || 'unknown';
+    // Try a simple query that works on both PostgreSQL and SQLite
+    let version = 'unknown';
+    let activeConnections = 0;
+    let maxConnections = 100;
 
-    const poolStats = await db.$queryRawUnsafe(
-      `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
-    ) as Array<{ count: number }>;
-    const activeConnections = poolStats[0]?.count || 0;
+    try {
+      // PostgreSQL-specific queries
+      const result = await db.$queryRawUnsafe(
+        `SELECT version() as version`
+      ) as Array<{ version: string }>;
+      version = result[0]?.version || 'unknown';
 
-    const maxResult = await db.$queryRawUnsafe(
-      `SHOW max_connections`
-    ) as Array<{ max_connections: number }>;
-    const maxConnections = maxResult[0]?.max_connections || 100;
+      const poolStats = await db.$queryRawUnsafe(
+        `SELECT count(*) as count FROM pg_stat_activity WHERE datname = current_database()`
+      ) as Array<{ count: number }>;
+      activeConnections = poolStats[0]?.count || 0;
+
+      const maxResult = await db.$queryRawUnsafe(
+        `SHOW max_connections`
+      ) as Array<{ max_connections: number }>;
+      maxConnections = maxResult[0]?.max_connections || 100;
+    } catch {
+      // SQLite fallback — just check connectivity
+      const sqliteResult = await db.$queryRawUnsafe(
+        `SELECT sqlite_version() as version`
+      ) as Array<{ version: string }>;
+      version = `SQLite ${sqliteResult[0]?.version || 'unknown'}`;
+      activeConnections = 1;
+      maxConnections = 1;
+    }
 
     const latencyMs = Date.now() - start;
     return {

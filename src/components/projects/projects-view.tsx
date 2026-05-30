@@ -586,8 +586,8 @@ function DetailDialog({
         );
         if (!res.ok) throw new Error('Failed to fetch analytics');
         const data = await res.json();
-        if (!cancelled && data.analytics) {
-          setAnalyticsData(data.analytics);
+        if (!cancelled && data.data?.analytics) {
+          setAnalyticsData(data.data.analytics);
         }
       } catch {
         if (!cancelled) {
@@ -846,7 +846,7 @@ export function ProjectsView() {
         throw new Error(`Failed to fetch storefronts (status ${res.status})`);
       }
       const data = await res.json();
-      const rawStorefronts: Storefront[] = (data.storefronts || []).map(mapApiStorefront);
+      const rawStorefronts: Storefront[] = (data.data || []).map(mapApiStorefront);
 
       // If API returns real data, show ONLY real data (no mock)
       if (rawStorefronts.length > 0) {

@@ -36,7 +36,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'builder', label: 'AI Builder', icon: Sparkles },
   { id: 'preview', label: 'Preview', icon: Eye },
-  { id: 'projects', label: 'My Storefronts', icon: FolderKanban, badge: '3', badgeColor: 'bg-sky-500' },
+  { id: 'projects', label: 'My Storefronts', icon: FolderKanban, badgeColor: 'bg-sky-500' },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate },
   { id: 'blocks', label: 'Design Blocks', icon: Blocks, badge: 'NEW', badgeColor: 'bg-violet-500' },
   { id: 'design-library', label: 'Design Library', icon: Palette },
@@ -46,7 +46,15 @@ const navItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-  const { currentView, setCurrentView, sidebarOpen, setSidebarOpen } = useAppStore();
+  const { currentView, setCurrentView, sidebarOpen, setSidebarOpen, storefronts } = useAppStore();
+
+  // Compute dynamic badges (storefronts count)
+  const itemsWithBadges = navItems.map((item) => {
+    if (item.id === 'projects' && storefronts.length > 0) {
+      return { ...item, badge: String(storefronts.length) };
+    }
+    return item;
+  });
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -82,7 +90,7 @@ export function AppSidebar() {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
-          {navItems.map((item) => {
+          {itemsWithBadges.map((item) => {
             const isActive = currentView === item.id;
             const Icon = item.icon;
 

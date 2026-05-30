@@ -145,12 +145,25 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Cleanup save timer on unmount
+  // Load saved settings from localStorage on mount
   useEffect(() => {
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, []);
+    try {
+      const saved = localStorage.getItem('storecraft-settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        updateSettings(parsed);
+      }
+    } catch (err) {
+      console.warn('[SETTINGS] Failed to load saved settings:', err);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = () => {
+    try {
+      localStorage.setItem('storecraft-settings', JSON.stringify(settings));
+    } catch (err) {
+      console.error('[SETTINGS] Failed to save settings:', err);
+    }
     setSaved(true);
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => setSaved(false), 2000);

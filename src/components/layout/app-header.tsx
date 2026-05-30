@@ -84,24 +84,18 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-8 w-8 relative">
               <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
             <DropdownMenuLabel>Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1">
-              <span className="text-sm font-medium">Storefront published successfully</span>
-              <span className="text-xs text-muted-foreground">Your storefront is now live</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1">
-              <span className="text-sm font-medium">SEO score improved to 92</span>
-              <span className="text-xs text-muted-foreground">Auto-optimization applied to meta tags</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1">
-              <span className="text-sm font-medium">New template available</span>
-              <span className="text-xs text-muted-foreground">Restaurant Pro v2.0 — with online ordering</span>
-            </DropdownMenuItem>
+            <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+              <Bell className="h-8 w-8 text-muted-foreground/30 mb-3" />
+              <p className="text-sm font-medium text-muted-foreground">No notifications yet</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                You&apos;ll see updates about your storefronts here
+              </p>
+            </div>
           </DropdownMenuContent>
         </DropdownMenu>
 

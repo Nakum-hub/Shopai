@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -98,7 +98,7 @@ model Storefront {
   status          String   @default("draft") // draft, generating, ready, published, error
   description     String?
   url             String?
-  html            String
+  html            String  
   businessProfile String?  // JSON business profile
   deploymentStatus String  @default("none")
   deploymentUrl   String?
@@ -156,8 +156,8 @@ model GenerationJob {
   storefrontId    String
   status          String    @default("idle")
   progress        Int       @default(0)
-  message         String?
-  voiceTranscript String?
+  message         String?  
+  voiceTranscript String?  
   logs            String?   // JSON array of logs
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
@@ -183,7 +183,7 @@ model PipelineExecution {
   inputSnapshot   String?   // JSON: the business profile / prompt that triggered this run
   outputHtml      String?   // final generated HTML
   validationScore Int?
-  errorMessage    String?
+  errorMessage    String?  
   startedAt       DateTime  @default(now())
   completedAt     DateTime?
   durationMs      Int?      // completion time in milliseconds
@@ -210,7 +210,7 @@ model PipelineLog {
   level       String   @default("info") // info, success, warning, error
   agent       String
   message     String
-  detail      String?
+  detail      String? 
   inputTokens Int?
   outputTokens Int?
   durationMs  Int?
@@ -257,7 +257,7 @@ model ChatHistory {
   sessionId String
   session   ConversationSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
   role      String   // user, assistant, system
-  content   String
+  content   String  
   metadata  String?  // JSON metadata
   createdAt DateTime @default(now())
 
@@ -273,7 +273,7 @@ model ChatHistory {
 model Template {
   id            String   @id @default(cuid())
   name          String
-  description   String?
+  description   String? 
   category      String   @default("other")
   preview       String?  // CSS gradient string
   sections      String?  // JSON sections config

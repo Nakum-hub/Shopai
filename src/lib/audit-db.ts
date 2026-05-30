@@ -140,7 +140,6 @@ export async function writeAuditLogBatch(entries: AuditLogInput[]): Promise<numb
         sessionId: entry.sessionId ?? null,
         correlationId: entry.correlationId ?? null,
       })),
-      skipDuplicates: true,
     });
     return result.count;
   } catch (error) {
