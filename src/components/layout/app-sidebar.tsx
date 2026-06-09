@@ -60,7 +60,7 @@ export function AppSidebar() {
     <TooltipProvider delayDuration={0}>
       <motion.aside
         className={cn(
-          'fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border bg-card',
+          'fixed left-0 top-0 z-40 hidden lg:flex h-screen flex-col border-r border-border bg-card',
           'transition-all duration-300 ease-in-out',
           sidebarOpen ? 'w-64' : 'w-16'
         )}

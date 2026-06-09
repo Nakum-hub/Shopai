@@ -246,13 +246,17 @@ function generateCsrfToken(): string {
  *
  * Once auth is configured, change `enforce: true` to block mismatched requests.
  */
-function handleCsrf(request: NextRequest, response: NextResponse): void {
+function handleCsrf(request: NextRequest, response: NextResponse): NextResponse | null {
   const path = request.nextUrl.pathname;
   const method = request.method;
 
-  // Check if this path needs CSRF protection
+  // Check if this path needs CSRF protection (exclude auth routes)
   const needsProtection =
     CSRF_PROTECTED_PATHS.some((p) => path.startsWith(p)) &&
+    !path.startsWith('/api/auth') &&
+    !path.startsWith('/api/csp-report') &&
+    !path.startsWith('/api/health') &&
+    !path.startsWith('/api/analytics/track') &&
     CSRF_PROTECTED_METHODS.includes(method);
 
   if (needsProtection) {
@@ -260,16 +264,19 @@ function handleCsrf(request: NextRequest, response: NextResponse): void {
     const headerToken = request.headers.get('X-CSRF-Token');
 
     if (!cookieToken || !headerToken || cookieToken !== headerToken) {
-      // Log warning — once auth is in place, this should return a 403
       securityLog(
         'warn',
-        'CSRF token missing or mismatched (not blocking — no auth yet)',
+        'CSRF token missing or mismatched — request blocked',
         request,
         {
           hasCookieToken: !!cookieToken,
           hasHeaderToken: !!headerToken,
           tokensMatch: cookieToken === headerToken,
         }
+      );
+      return new NextResponse(
+        JSON.stringify({ success: false, error: { code: 'CSRF_INVALID', message: 'CSRF token invalid or missing' } }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
       );
     }
   } else if (method === 'GET' && path.startsWith('/')) {
@@ -284,6 +291,8 @@ function handleCsrf(request: NextRequest, response: NextResponse): void {
       maxAge: 86400, // 24 hours
     });
   }
+
+  return null;
 }
 
 // =============================================================================
@@ -424,6 +433,45 @@ export function middleware(request: NextRequest) {
   if (corsResponse) return corsResponse;
 
   // =========================================================================
+  // 3.5. API Route Authentication (session cookie check)
+  // =========================================================================
+  const PROTECTED_API_PATHS = [
+    '/api/storefronts',
+    '/api/analytics',
+    '/api/bi',
+    '/api/pipeline',
+    '/api/deploy',
+    '/api/chat',
+    '/api/generate',
+    '/api/voice',
+    '/api/templates',
+    '/api/extract-profile',
+  ];
+  // Public API paths that do NOT require authentication
+  // /api/auth, /api/health, /api/csp-report, /api/demo, /api/ws-token, /api/analytics/track
+  const path = request.nextUrl.pathname;
+  const isProtectedApi = PROTECTED_API_PATHS.some((p) => path.startsWith(p));
+  // Exclude the public analytics tracking endpoint
+  const isPublicTrack = path.startsWith('/api/analytics/track');
+
+  if (isProtectedApi && !isPublicTrack) {
+    // Check for NextAuth session cookie (works in both dev and prod)
+    const sessionToken =
+      request.cookies.get('next-auth.session-token')?.value ||
+      request.cookies.get('__Secure-next-auth.session-token')?.value;
+
+    if (!sessionToken) {
+      securityLog('warn', 'Unauthenticated API access blocked', request, {
+        action: 'auth_blocked',
+      });
+      return new NextResponse(
+        JSON.stringify({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+  }
+
+  // =========================================================================
   // 4. Build Response with Security Headers
   // =========================================================================
   const response = NextResponse.next({
@@ -457,7 +505,8 @@ export function middleware(request: NextRequest) {
   // =========================================================================
   // 6. CSRF Protection (Double-Submit Cookie)
   // =========================================================================
-  handleCsrf(request, response);
+  const csrfResponse = handleCsrf(request, response);
+  if (csrfResponse) return csrfResponse;
 
   return response;
 }

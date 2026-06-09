@@ -70,6 +70,7 @@ services:
       target: production
     container_name: storecraft-app
     restart: unless-stopped
+    command: sh -c "npx prisma migrate deploy && node server.js"
     ports:
       - "3000:3000"
     environment:

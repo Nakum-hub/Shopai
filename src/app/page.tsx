@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { AuthGate } from '@/components/auth-gate';
@@ -8,6 +8,7 @@ import { AppSidebar } from '@/components/layout/app-sidebar';
 import { AppHeader } from '@/components/layout/app-header';
 import { useAppStore } from '@/store/app-store';
 import { cn } from '@/lib/utils';
+import { getCsrfToken } from '@/lib/csrf';
 
 // Lazy-loaded views (dynamic imports for code splitting)
 // Previously static imports — now lazy-loaded for performance:
@@ -85,7 +86,7 @@ function AppContent() {
       <div
         className={cn(
           'flex-1 flex flex-col transition-all duration-300 ease-in-out',
-          sidebarOpen ? 'ml-64' : 'ml-16'
+          sidebarOpen ? 'lg:ml-64 ml-0' : 'lg:ml-16 ml-0'
         )}
       >
         <AppHeader />
@@ -107,6 +108,25 @@ function AppContent() {
 }
 
 export default function Home() {
+  // Install global CSRF fetch interceptor — adds X-CSRF-Token header to all mutations
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = function csrfFetch(input: RequestInfo | URL, init?: RequestInit) {
+      const method = (init?.method || 'GET').toUpperCase();
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+        const csrfToken = getCsrfToken();
+        if (csrfToken) {
+          const headers = new Headers(init?.headers);
+          if (!headers.has('X-CSRF-Token')) {
+            headers.set('X-CSRF-Token', csrfToken);
+          }
+          return originalFetch.call(this, input, { ...init, headers });
+        }
+      }
+      return originalFetch.call(this, input, init);
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
   return (
     <ThemeProvider
       attribute="class"
